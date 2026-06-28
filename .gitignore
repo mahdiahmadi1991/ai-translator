@@ -1,0 +1,56 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Local secrets — never commit (only the inventory README and *.example.* siblings)
+# Note: re-including files requires NOT excluding their parent dir, so we ignore the
+# CONTENTS (/.secrets/**) and re-include dirs + the allowed files explicitly.
+# ─────────────────────────────────────────────────────────────────────────────
+/.secrets/**
+!/.secrets/README.md
+!/.secrets/**/
+!/.secrets/**/*.example.*
+
+# ─────────────────────────────────────────────────────────────────────────────
+# .NET build outputs
+# ─────────────────────────────────────────────────────────────────────────────
+[Bb]in/
+[Oo]bj/
+[Oo]ut/
+[Dd]ebug/
+[Rr]elease/
+[Pp]ublish/
+artifacts/
+*.user
+*.suo
+*.userprefs
+*.dll
+*.pdb
+*.exe
+project.lock.json
+project.fragment.lock.json
+
+# NuGet
+*.nupkg
+*.snupkg
+.nuget/
+packages/
+!**/packages/build/
+
+# ─────────────────────────────────────────────────────────────────────────────
+# IDE / editor state
+# ─────────────────────────────────────────────────────────────────────────────
+.vs/
+.vscode/
+.idea/
+*.swp
+*~
+
+# ─────────────────────────────────────────────────────────────────────────────
+# OS noise
+# ─────────────────────────────────────────────────────────────────────────────
+Thumbs.db
+desktop.ini
+.DS_Store
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Velopack / release tooling output
+# ─────────────────────────────────────────────────────────────────────────────
+Releases/
