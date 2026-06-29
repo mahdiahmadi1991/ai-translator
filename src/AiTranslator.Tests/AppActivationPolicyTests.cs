@@ -42,4 +42,28 @@ public class AppActivationPolicyTests
     [InlineData("   ")]
     public void Null_or_blank_foreground_does_not_activate(string? exe)
         => Assert.False(AppActivationPolicy.ShouldActivate(exe, Allow, NoBlock));
+
+    // --- regex "moniker" matching (Grammarly model) ---
+
+    [Fact]
+    public void Moniker_matches_packaged_whatsapp_root_exe()
+        => Assert.True(AppActivationPolicy.ShouldActivate("WhatsApp.Root.exe", ["whatsapp"], NoBlock));
+
+    [Fact]
+    public void Moniker_matches_telegram_full_path()
+        => Assert.True(AppActivationPolicy.ShouldActivate(
+            @"C:\Program Files\WindowsApps\Telegram.._x64__\Telegram.exe", ["whatsapp", "telegram"], NoBlock));
+
+    [Fact]
+    public void Moniker_does_not_match_unrelated_webview_host()
+        => Assert.False(AppActivationPolicy.ShouldActivate(
+            @"C:\...\msedgewebview2.exe", ["whatsapp", "telegram"], NoBlock));
+
+    [Fact]
+    public void Regex_moniker_alternation_matches()
+        => Assert.True(AppActivationPolicy.ShouldActivate("Telegram.exe", ["whats(app)?|tele(gram)?"], NoBlock));
+
+    [Fact]
+    public void Invalid_regex_moniker_falls_back_to_substring()
+        => Assert.True(AppActivationPolicy.ShouldActivate("notepad++.exe", ["notepad++"], NoBlock));
 }

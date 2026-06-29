@@ -2,7 +2,7 @@
 
 Owner: Mehdi
 Status: Accepted
-Last reviewed: 2026-06-28
+Last reviewed: 2026-06-29
 
 ## Context
 
@@ -51,6 +51,31 @@ Replicate Grammarly's technique:
 - Per-app fragility is expected (Grammarly ships a calibration table for the same reason). Qt
   (Telegram) may expose only element bounds, not a caret — acceptable.
 - Forcing Chromium accessibility adds CPU cost to the target app — a known, documented trade-off.
+
+## Validation (2026-06-29, on the dev machine)
+
+A UIA tree-walk probe + a deep read of Grammarly's `Resources/Configuration/IntegrationOptions.json`
+confirmed the model and drove these **refinements actually implemented** (M2):
+
+- **App identity = the foreground top-level window, not the focus-event hwnd.** Modern WhatsApp is a
+  WinUI shell **`WhatsApp.Root.exe`** (`WinUIDesktopWin32WindowClass`) hosting a `WebView2`; the focus
+  event's window often belongs to `msedgewebview2.exe`. We resolve the app (and the injection target)
+  from `GetForegroundWindow()` so it reads `WhatsApp.Root.exe`, while the field comes from UIA's
+  system-wide focused element.
+- **Allowlist/blocklist entries are regex "monikers"** matched against the process file name
+  (Grammarly's `Moniker`). Defaults: `whatsapp`, `telegram` (so `WhatsApp.exe` *and* `WhatsApp.Root.exe`
+  match). See [configuration.md](../../reference/configuration.md).
+- **Managed `System.Windows.Automation` was used** (not COM `IUIAutomation`) — it needs no NuGet
+  (offline build) and, on this build, resolved both targets without an explicit IA2 wake:
+  - WhatsApp field: `ControlType.Edit`, Name `Type a message to <chat>`, patterns **Value(read-only)+Text**.
+  - Telegram field: `ControlType.Edit`, ClassName `Ui::InputField::Inner`, patterns Value+Text.
+  The explicit **IAccessible2 enabler stays a documented fallback** for apps whose UIA tree is empty.
+- **`IsEditable` accepts an `Edit` with a read-only `ValuePattern` when it has a `TextPattern`** — the
+  WhatsApp Chromium contenteditable case (a strict writable-Value check wrongly rejected it).
+- **UIA resolution runs off the pump thread with a timeout** (M2 review fix), per the Consequences note.
+- **Per-app `Offset`/`Corner`** mirror Grammarly's per-app `DefaultPosition` (observed e.g. Slack
+  `TopRight, -20,-25`; Gmail body `TopRight, 10,-20`); ours live in `appOffsets`.
+- Diagnostics: set `AITR_FOCUS_LOG=1` to trace the watcher's decisions to `%TEMP%\ai-translator-focus.log`.
 
 ## Sources
 

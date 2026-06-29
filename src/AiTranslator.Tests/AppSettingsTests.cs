@@ -17,6 +17,6 @@ public class AppSettingsTests
         Assert.Equal("Ctrl+Alt+T", s.Hotkey);
         Assert.Equal("gpt-5.1", s.Model);
         Assert.False(s.AutoSend);
-        Assert.Contains("WhatsApp.exe", s.Allowlist);
+        Assert.Contains("whatsapp", s.Allowlist);   // regex moniker (matches WhatsApp.exe / WhatsApp.Root.exe)
     }
 }

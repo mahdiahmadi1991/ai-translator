@@ -21,8 +21,8 @@ the canonical schema; update it in the same change as any settings-shape change.
 | `debounceMs` | int | `500` | Idle delay before translating while typing |
 | `hotkey` | string | `"Ctrl+Alt+T"` | Global shortcut to open the input box; rebindable |
 | `autoAppearBadge` | bool | `true` | Show the badge automatically in allowlisted apps |
-| `allowlist` | string[] | `["WhatsApp.exe","Telegram.exe"]` | Exe names where the badge auto-appears |
-| `blocklist` | string[] | `[]` | Exe names / domains to always suppress (e.g. password tools) |
+| `allowlist` | string[] | `["whatsapp","telegram"]` | Regex **monikers** matched (case-insensitive) against the foreground process name |
+| `blocklist` | string[] | `[]` | Regex monikers to always suppress (takes precedence; e.g. password tools) |
 | `appOffsets` | map | `{}` | Per-exe badge offset calibration `{ "exe": {"corner":1,"dx":64,"dy":-6} }` |
 | `theme` | enum | `"system"` | `system` \| `light` \| `dark` |
 | `uiLanguage` | string (BCP-47) | `"fa"` | Language of the app's own UI |
@@ -31,7 +31,12 @@ the canonical schema; update it in the same change as any settings-shape change.
 
 ## Notes
 
-- `allowlist`/`blocklist` mirror Grammarly's `ButtonPositions.json` / `Blocklist.json` model.
+- `allowlist`/`blocklist` mirror Grammarly's `Moniker` model: each entry is a **case-insensitive
+  regular expression** tested against the foreground process file name (invalid regex falls back to a
+  substring test). So `whatsapp` matches both `WhatsApp.exe` and the packaged `WhatsApp.Root.exe`, and
+  `telegram` matches `Telegram.exe`. App identity is taken from the foreground top-level window, so
+  WebView2 apps (WhatsApp) match their shell process, not `msedgewebview2.exe`
+  ([ADR-0003](../architecture/decision-records/0003-focus-detection-winevent-uia-ia2.md) § Validation).
 - `appOffsets.corner` follows the anchor enum used by the badge anchoring code; `dx`/`dy` are DIPs.
 - Password and read-only fields are always skipped regardless of allowlist.
 - Settings are read by `SettingsStore` and consumed by `LanguageDirector`, `FocusWatcher`,
