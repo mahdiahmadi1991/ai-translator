@@ -4,9 +4,6 @@ namespace AiTranslator.Core.Abstractions;
 public interface ITextInjector
 {
     /// <summary>Append <paramref name="text"/> at the end of the target field's current content
-    /// (existing text is preserved).</summary>
+    /// (existing text is preserved; the caret ends at the end).</summary>
     Task AppendTextAsync(FocusTarget target, string text, CancellationToken ct);
-
-    /// <summary>Move the target field's caret to the end of its text (after an injection).</summary>
-    void PlaceCaretAtEnd(FocusTarget target);
 }
