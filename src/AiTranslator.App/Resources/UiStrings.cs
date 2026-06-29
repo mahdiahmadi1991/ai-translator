@@ -14,7 +14,9 @@ public static class UiStrings
     public const string TrayTooltip = "AI Translator — press the hotkey to translate";
 
     // Overlay
-    public const string OverlayHint = "Type here — translation replaces the focused field";
+    public const string OverlayHint = "Type your text, then Translate (Ctrl+Enter) — it replaces the field";
+    public const string OverlayTranslate = "Translate";
+    public const string OverlayTranslating = "Translating…";
     public const string OverlayNoApiKey = "Set your OpenAI key in Settings first (tray → Settings).";
     public const string OverlayError = "Translation failed:";
 

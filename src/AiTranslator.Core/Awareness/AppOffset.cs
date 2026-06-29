@@ -10,8 +10,9 @@ namespace AiTranslator.Core.Awareness;
 public sealed record AppOffset(int Corner, int Dx, int Dy)
 {
     /// <summary>
-    /// Fallback for an app with no calibration: bottom-right of the field, nudged in a little
-    /// (matches the documented example and the overview's "bottom-right corner by default").
+    /// Fallback for an app with no calibration: zero nudge. The badge anchors just inside the field's
+    /// right edge, vertically centred (Grammarly-style); <see cref="Dx"/>/<see cref="Dy"/> only fine-tune
+    /// that per app. <see cref="Corner"/> is reserved for future anchor variants.
     /// </summary>
-    public static AppOffset Default { get; } = new(Corner: 1, Dx: 64, Dy: -6);
+    public static AppOffset Default { get; } = new(Corner: 1, Dx: 0, Dy: 0);
 }
