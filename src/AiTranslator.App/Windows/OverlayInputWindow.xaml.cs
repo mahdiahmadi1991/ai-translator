@@ -56,6 +56,8 @@ public partial class OverlayInputWindow : Window
             // plain Enter is intentionally NOT handled: AcceptsReturn makes it insert a newline.
         };
 
+        Input.TextChanged += (_, _) => UpdateHeader();   // auto direction + source→target label
+
         // Auto-hide: while the box is visible, poll the foreground window; if it is neither this box
         // nor the target field, hide (preserving the draft). Polling is more reliable than
         // Window.Deactivated, which never fires if the box never actually took activation.
@@ -84,6 +86,11 @@ public partial class OverlayInputWindow : Window
         }
     }
 
+    /// <summary>Raised when the user clicks the header settings gear.</summary>
+    public event EventHandler? SettingsRequested;
+
+    private void OnSettingsClick(object sender, RoutedEventArgs e) => SettingsRequested?.Invoke(this, EventArgs.Empty);
+
     /// <summary>Hotkey path: capture the foreground window as the target and show bottom-centre.</summary>
     public void ShowFor() => ShowForCore(_focus.CaptureCurrent(), anchor: null);
 
@@ -111,7 +118,38 @@ public partial class OverlayInputWindow : Window
         Activate();
         Input.Focus();
         Input.CaretIndex = Input.Text.Length;   // continue the preserved draft
+        UpdateHeader();
     }
+
+    /// <summary>Set the input's reading direction from its content and show the source→target label.</summary>
+    private void UpdateHeader()
+    {
+        var settings = _settingsProvider();
+        var text = Input.Text;
+
+        bool rtl = string.IsNullOrWhiteSpace(text)
+            ? LanguageDirector.IsRightToLeftLanguage(settings.LanguagePair.Primary)
+            : LanguageDirector.IsRightToLeft(text);
+        Input.FlowDirection = rtl ? FlowDirection.RightToLeft : FlowDirection.LeftToRight;
+
+        var dir = LanguageDirector.Resolve(text, settings.LanguagePair, settings.AutoDirection);
+        DirectionLabel.Text = $"{LangName(dir.SourceLang)}  →  {LangName(dir.TargetLang)}";
+    }
+
+    private static string LangName(string code) => code.ToLowerInvariant() switch
+    {
+        "fa" => "Persian",
+        "en" => "English",
+        "ar" => "Arabic",
+        "fr" => "French",
+        "de" => "German",
+        "es" => "Spanish",
+        "ru" => "Russian",
+        "tr" => "Turkish",
+        "ur" => "Urdu",
+        "ps" => "Pashto",
+        _ => code.ToUpperInvariant(),
+    };
 
     private void PositionNearBottomCenter()
     {

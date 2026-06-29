@@ -28,6 +28,14 @@ public static class LanguageDirector
             : new TranslationDirection(pair.Secondary, pair.Primary);
     }
 
+    /// <summary>True when the text's dominant script is right-to-left (Arabic/Persian/…); empty → false.</summary>
+    public static bool IsRightToLeft(string text)
+        => !string.IsNullOrWhiteSpace(text) && IsMostlyArabicScript(text);
+
+    /// <summary>True when a BCP-47 language code is written in a right-to-left script.</summary>
+    public static bool IsRightToLeftLanguage(string languageCode)
+        => !string.IsNullOrWhiteSpace(languageCode) && ArabicScriptLangs.Contains(languageCode);
+
     private static bool IsMostlyArabicScript(string text)
     {
         int arabic = 0, latin = 0;

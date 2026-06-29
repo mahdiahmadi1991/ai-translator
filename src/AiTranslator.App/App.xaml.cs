@@ -130,6 +130,7 @@ public partial class App : Application
             _services.GetRequiredService<ITextInjector>(),
             _services.GetRequiredService<ITargetResolver>(),
             () => _settings);
+        overlay.SettingsRequested += (_, _) => OpenSettings();
         overlay.Closed += (_, _) =>
         {
             if (ReferenceEquals(_overlay, overlay))
@@ -224,6 +225,7 @@ public partial class App : Application
     {
         if (_activeField is { } field)
         {
+            _badge?.Hide();   // the box replaces the badge; the badge reappears when the field refocuses
             ShowOverlay(new FocusTarget(field.WindowHandle), field.FieldRect);
         }
     }

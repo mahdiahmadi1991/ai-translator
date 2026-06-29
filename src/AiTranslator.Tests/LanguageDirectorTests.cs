@@ -38,4 +38,20 @@ public class LanguageDirectorTests
         var d = LanguageDirector.Resolve("سلام world این متن فارسی است", FaEn, autoDirection: true);
         Assert.Equal("fa", d.SourceLang);
     }
+
+    [Theory]
+    [InlineData("سلام", true)]
+    [InlineData("Hello", false)]
+    [InlineData("", false)]
+    [InlineData("   ", false)]
+    public void IsRightToLeft_follows_dominant_script(string text, bool expected)
+        => Assert.Equal(expected, LanguageDirector.IsRightToLeft(text));
+
+    [Theory]
+    [InlineData("fa", true)]
+    [InlineData("ar", true)]
+    [InlineData("en", false)]
+    [InlineData("de", false)]
+    public void IsRightToLeftLanguage_classifies_codes(string code, bool expected)
+        => Assert.Equal(expected, LanguageDirector.IsRightToLeftLanguage(code));
 }
