@@ -2,17 +2,17 @@
 
 Owner: Mehdi
 Status: Accepted
-Last reviewed: 2026-06-28
+Last reviewed: 2026-06-29
 
-> All commands run **on Windows** (PowerShell or a dev shell). See
-> [development-setup.md](development-setup.md) for why Linux/WSL cannot build the WPF app.
-> These commands become live once the `src/` solution exists (milestone M1).
+> Commands run **on Windows** (PowerShell or a dev shell). Restore is **offline** — packages come
+> from the local `.nuget-packages/` fallback folder ([offline-build.md](offline-build.md)); no
+> `nuget.org` access is needed.
 
 ## Restore & build
 
 ```powershell
-dotnet restore src/AiTranslator.sln
-dotnet build   src/AiTranslator.sln -c Debug
+dotnet restore src/AiTranslator.slnx
+dotnet build   src/AiTranslator.slnx -c Debug
 ```
 
 ## Run

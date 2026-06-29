@@ -16,16 +16,14 @@ dotnet build   src/AiTranslator.slnx -c Debug
 dotnet run --project src/AiTranslator.App
 ```
 
-## 1. Package restore ([Directory.Packages.props](../../src/Directory.Packages.props), [nuget.config](../../src/nuget.config))
+## 1. Package restore — offline ([offline-build.md](offline-build.md))
 
-Package versions are now pinned to versions **verified to exist on nuget.org** (2026-06-29), and
-[nuget.config](../../src/nuget.config) adds **package source mapping** so a machine-global `github`
-source no longer breaks restore under CPM (`NU1507`). If restore still complains about a version,
-bump it:
-
-```powershell
-dotnet list src/AiTranslator.slnx package --outdated
-```
+Restore is **offline**: the host can't reach `nuget.org`, so packages are served from the git-ignored
+`.nuget-packages/` fallback folder via `RestoreFallbackFolders` in
+[Directory.Build.props](../../src/Directory.Build.props) (which also `NoWarn`s `NU1507`, a
+false-positive raised by a machine-global `github` source). Package versions are pinned to versions
+verified on nuget.org. If restore reports a **missing** package, repopulate the folder from a
+networked machine (see [offline-build.md](offline-build.md)).
 
 Note: `Meziantou.Framework.Win32.CredentialManager` is held at `1.1.0` (classic API used by the
 code); `2.x` exists but its API must be verified before bumping.

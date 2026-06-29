@@ -11,6 +11,7 @@ just routes you there.
 
 | Area | Start here | What's inside |
 | --- | --- | --- |
+| **Start here** | [status.md](status.md) | Current state, what's verified, and the immediate next task |
 | **Architecture** | [architecture/overview.md](architecture/overview.md) | The system design / spec: behavior, components, data flow, security model |
 | **Decisions** | [architecture/decision-records/](architecture/decision-records/README.md) | ADRs — the load-bearing technical choices and why |
 | **Diagrams** | [architecture/diagrams/](architecture/diagrams/component-and-flow.md) | Component map and data-flow diagrams |
@@ -22,11 +23,9 @@ just routes you there.
 
 ## Project status
 
-**M1 (walking skeleton) in progress.** Architecture + decisions are written; the `src/` solution
-exists. The cross-platform **Core + Tests are built and green**; the **Infrastructure + App** layers
-are written and await their first **Windows build** (see
-[guides/windows-build-checklist.md](guides/windows-build-checklist.md)). Roadmap:
-[architecture/overview.md § Roadmap](architecture/overview.md#9-roadmap).
+**M1 (walking skeleton) in progress; development is now native on Windows.** The `src/` solution
+exists: **Core + Tests are built and green (31/31)**; **Infrastructure + App** are written and await
+their first **Windows build**. Full picture and next steps: [status.md](status.md).
 
 ## Conventions for this docs tree
 

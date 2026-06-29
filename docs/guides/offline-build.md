@@ -5,15 +5,13 @@ Status: Accepted
 Last reviewed: 2026-06-29
 
 The Windows host building this solution **cannot reliably reach `nuget.org`** (connections are reset
-— typical of a filtered network). WSL/Linux on the same machine **can**. So packages are downloaded
-once from WSL and the Windows build (Visual Studio over `\\wsl.localhost`) restores from them with
-**no network**.
+— typical of a filtered network). So every package is pre-downloaded once (from any networked machine,
+e.g. WSL) into a folder beside the repo, and the build restores from it with **no network**.
 
 ## How it works
 
 - **`.nuget-packages/`** (repo root, git-ignored) holds every restored package in NuGet's
-  global-packages layout. It lives on the shared WSL filesystem, so Visual Studio reads it over
-  `\\wsl.localhost`.
+  global-packages layout, on disk next to the solution.
 - **`Directory.Build.props`** wires it up for every project:
   - `RestoreFallbackFolders` → `.nuget-packages` — NuGet serves packages from here and skips the
     network for anything found (which is everything).
@@ -23,23 +21,30 @@ once from WSL and the Windows build (Visual Studio over `\\wsl.localhost`) resto
 - On Windows, the WPF/WinForms **targeting pack comes from the installed .NET 10 SDK**, not the
   folder; only the regular NuGet packages are served offline.
 
-## First build on Windows
+## Building
 
-1. The `.nuget-packages/` folder already exists on disk (populated from WSL). Do **not** delete it.
-2. In Visual Studio, **close and reopen the solution** so it re-reads `Directory.Build.props`.
-3. **Build → Rebuild Solution.** Restore runs offline from `.nuget-packages`.
+1. Make sure **`.nuget-packages/` exists** next to the repo. Do **not** delete it.
+2. Restore + build normally (`dotnet build src/AiTranslator.slnx`, or Rebuild in the IDE). If using an
+   IDE, reopen the solution after pulling so it re-reads `Directory.Build.props`.
 
-## Repopulating (after adding or bumping a package)
+## Moving the repo to a native Windows path
 
-Adding a package changes the version set, so the folder must be refreshed **from WSL/Linux** (which
-has network):
+`.nuget-packages/` is **git-ignored**, so `git clone`/copy will **not** bring it. If you relocate the
+repo (e.g. from the WSL share to `C:\…`), **copy the `.nuget-packages/` folder manually** alongside it
+(e.g. `robocopy`), or repopulate it (below). Without it, an offline host cannot restore.
+
+## Repopulating (after adding or bumping a package, or on a fresh checkout)
+
+Adding a package changes the version set, so refresh the folder **from a machine with network**
+(e.g. WSL/Linux on the same box, which can reach nuget.org):
 
 ```bash
-# from the repo root, in WSL
+# from the repo root, on a networked machine
 dotnet restore src/AiTranslator.slnx --packages .nuget-packages
 ```
 
-Then rebuild in Visual Studio. If a brand-new transitive package is missing, this command fetches it.
+If a brand-new transitive package is reported missing during a Windows build, this command fetches it.
+Then copy/keep `.nuget-packages/` next to the repo the Windows host builds.
 
 ## Alternative
 

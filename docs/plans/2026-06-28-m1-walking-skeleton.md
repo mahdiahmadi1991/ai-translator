@@ -24,7 +24,7 @@
 
 ```
 src/
-  AiTranslator.sln
+  AiTranslator.slnx                     # .NET 10 default solution format
   Directory.Build.props                 # shared: nullable, langversion, file-scoped ns analyzers
   Directory.Packages.props              # central package versions
   AiTranslator.Core/                    # net10.0 — pure, fully unit-tested
@@ -74,7 +74,7 @@ src/
 ### Task 1: Solution & project scaffold
 
 **Files:**
-- Create: `src/AiTranslator.sln`, `src/Directory.Build.props`, `src/Directory.Packages.props`
+- Create: `src/AiTranslator.slnx`, `src/Directory.Build.props`, `src/Directory.Packages.props`
 - Create: the four `.csproj` files listed above
 
 **Interfaces:**
