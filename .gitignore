@@ -54,3 +54,6 @@ desktop.ini
 # Velopack / release tooling output
 # ─────────────────────────────────────────────────────────────────────────────
 Releases/
+
+# Offline NuGet package cache (shared with Visual Studio over WSL; populated from Linux)
+/.nuget-packages/

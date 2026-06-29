@@ -15,7 +15,7 @@ just routes you there.
 | **Decisions** | [architecture/decision-records/](architecture/decision-records/README.md) | ADRs — the load-bearing technical choices and why |
 | **Diagrams** | [architecture/diagrams/](architecture/diagrams/component-and-flow.md) | Component map and data-flow diagrams |
 | **Reference** | [reference/configuration.md](reference/configuration.md) · [reference/openai-models.md](reference/openai-models.md) · [reference/source-layout.md](reference/source-layout.md) | Stable reference: settings schema, model/pricing, planned source layout |
-| **Guides** | [guides/development-setup.md](guides/development-setup.md) · [guides/build-and-run.md](guides/build-and-run.md) · [guides/windows-build-checklist.md](guides/windows-build-checklist.md) | How-to: set up, build, run, first Windows build |
+| **Guides** | [guides/development-setup.md](guides/development-setup.md) · [guides/build-and-run.md](guides/build-and-run.md) · [guides/windows-build-checklist.md](guides/windows-build-checklist.md) · [guides/offline-build.md](guides/offline-build.md) | How-to: set up, build, run, first Windows build, offline build |
 | **Plans** | [plans/2026-06-28-m1-walking-skeleton.md](plans/2026-06-28-m1-walking-skeleton.md) · [plans/2026-06-29-m2-awareness.md](plans/2026-06-29-m2-awareness.md) | Per-milestone implementation plans (TDD tasks) |
 | **Governance** | [governance/README.md](governance/README.md) | Project-specific rules and how global standards apply here |
 | **Meta** | [_meta/document-routing.md](_meta/document-routing.md) · [_meta/naming-conventions.md](_meta/naming-conventions.md) | Where new docs go; naming + headers |
