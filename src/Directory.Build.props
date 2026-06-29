@@ -6,10 +6,24 @@
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <EnableNETAnalyzers>true</EnableNETAnalyzers>
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
-    <!-- Force a single restore source for ALL projects regardless of any machine-global NuGet
-         source (e.g. "github"). Set here (Directory.Build.props is always read) so restore works
-         even when a sibling nuget.config is not discovered (e.g. VS over a \\wsl.localhost path).
-         Avoids NU1507 under central package management. -->
+    <!-- Allow restoring/evaluating net10.0-windows projects on non-Windows (so the offline feed can
+         be produced from WSL/Linux, where the network reaches nuget.org). No-op on Windows. -->
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <!-- Force a single restore source for CLI restores regardless of any machine-global NuGet source
+         (e.g. "github"). Visual Studio does NOT honor this property, so NU1507 is also suppressed
+         below; sourcing is moot anyway because all packages are served from the offline folder. -->
     <RestoreSources>https://api.nuget.org/v3/index.json</RestoreSources>
+
+    <!-- OFFLINE BUILD (network-restricted Windows). All packages are pre-downloaded from WSL/Linux
+         into a repo-local fallback folder (git-ignored, global-packages layout) on the shared
+         filesystem. NuGet serves packages from there and SKIPS the network for anything found.
+         Visual Studio reads it over the wsl.localhost share, so the build needs NO network.
+         To repopulate from Linux, see docs/guides/offline-build.md. -->
+    <RestoreFallbackFolders>$(MSBuildThisFileDirectory)../.nuget-packages</RestoreFallbackFolders>
+
+    <!-- NU1507 (multiple package sources under CPM) is a false positive here: VS reports a
+         machine-global "github" source it ignores RestoreSources for, but every package is served
+         from the offline folder above. Suppress it so it is not a build-breaking error. -->
+    <NoWarn>$(NoWarn);NU1507</NoWarn>
   </PropertyGroup>
 </Project>
