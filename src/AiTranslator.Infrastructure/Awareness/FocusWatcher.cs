@@ -15,17 +15,26 @@ namespace AiTranslator.Infrastructure.Awareness;
 /// <see cref="FieldFocused"/> when an editable field gains focus inside an allowlisted app, or
 /// <see cref="FieldUnfocused"/> when focus leaves it. The hook runs on a dedicated STA thread with a
 /// WPF <see cref="Dispatcher"/> message pump (out-of-context WinEvents are delivered on the hooking
-/// thread, which must pump messages). Events are raised on that thread — consumers marshal to the UI
-/// thread themselves. The global hotkey remains the guaranteed path; auto-appearance is best-effort.
+/// thread, which must pump messages).
 /// </summary>
+/// <remarks>
+/// Per ADR-0003, cross-process UIA resolution must never block the hook/pump thread, so the cheap
+/// allowlist decision runs on the pump thread but <see cref="ITargetResolver"/> is invoked on a
+/// worker with a hard timeout; the result is marshalled back onto the pump thread (so all state stays
+/// single-threaded) before <see cref="FieldFocused"/> is raised. A monotonically increasing
+/// generation counter drops results from superseded focus changes. Events are raised on the pump
+/// thread — consumers marshal to their UI thread themselves (non-blocking).
+/// </remarks>
 public sealed class FocusWatcher : IFocusWatcher
 {
     private const int OBJID_CURSOR = -9;                 // skip mouse-cursor object noise on FOCUS
     private const int LocationDebounceMs = 80;           // coalesce LOCATIONCHANGE bursts
+    private const int ResolveTimeoutMs = 250;            // ADR-0003: never block on UIA without a bound
 
     private readonly Func<AppSettings> _settingsProvider;
     private readonly ITargetResolver? _targetResolver;
     private readonly uint _ownProcessId = (uint)Environment.ProcessId;
+    private readonly ManualResetEventSlim _ready = new(initialState: false);
 
     private Thread? _thread;
     private Dispatcher? _dispatcher;
@@ -37,7 +46,9 @@ public sealed class FocusWatcher : IFocusWatcher
 
     private HWND _activeHwnd;
     private uint _activeThreadId;
+    private string _activeExe = string.Empty;
     private bool _fieldActive;
+    private int _focusGeneration;                         // drops resolves from superseded focus changes
 
     /// <param name="settingsProvider">Supplies the current settings (allowlist/blocklist) per event.</param>
     /// <param name="targetResolver">
@@ -60,6 +71,7 @@ public sealed class FocusWatcher : IFocusWatcher
             return;   // idempotent
         }
 
+        _ready.Reset();
         _thread = new Thread(RunMessageLoop)
         {
             IsBackground = true,
@@ -71,19 +83,25 @@ public sealed class FocusWatcher : IFocusWatcher
 
     public void Stop()
     {
-        var dispatcher = _dispatcher;
-        if (dispatcher is null)
+        if (_thread is null)
         {
             return;
         }
 
-        dispatcher.InvokeShutdown();   // ends Dispatcher.Run(); the hook thread then disposes its hooks
-        _thread?.Join(millisecondsTimeout: 2000);
+        // Wait until the hook thread has published its dispatcher (fixes the start/stop race where a
+        // Stop racing a just-started thread would leak the thread and its global hooks forever).
+        _ready.Wait(millisecondsTimeout: 2000);
+        _dispatcher?.InvokeShutdown();   // ends Dispatcher.Run(); the hook thread then disposes its hooks
+        _thread.Join(millisecondsTimeout: 2000);
         _thread = null;
         _dispatcher = null;
     }
 
-    public void Dispose() => Stop();
+    public void Dispose()
+    {
+        Stop();
+        _ready.Dispose();
+    }
 
     private void RunMessageLoop()
     {
@@ -94,6 +112,7 @@ public sealed class FocusWatcher : IFocusWatcher
             Interval = TimeSpan.FromMilliseconds(LocationDebounceMs),
         };
         _locationDebounce.Tick += OnLocationDebounceTick;
+        _ready.Set();   // publish the dispatcher before Stop() can act on it
 
         _foregroundHook = Hook(PInvoke.EVENT_SYSTEM_FOREGROUND);
         _focusHook = Hook(PInvoke.EVENT_OBJECT_FOCUS);
@@ -117,29 +136,38 @@ public sealed class FocusWatcher : IFocusWatcher
         HWINEVENTHOOK hook, uint @event, HWND hwnd,
         int idObject, int idChild, uint idEventThread, uint dwmsEventTime)
     {
-        if (hwnd.IsNull)
+        // This is invoked by the message pump; an exception unwinding to the top of the background
+        // thread would terminate the process, so nothing may escape here.
+        try
         {
-            return;
-        }
-
-        if (@event == PInvoke.EVENT_OBJECT_LOCATIONCHANGE)
-        {
-            // The active field (or its window) moved/resized — re-anchor after a short debounce.
-            if (_fieldActive && hwnd == _activeHwnd && _targetResolver is not null)
+            if (hwnd.IsNull)
             {
-                _locationDebounce!.Stop();
-                _locationDebounce.Start();
+                return;
             }
 
-            return;
-        }
+            if (@event == PInvoke.EVENT_OBJECT_LOCATIONCHANGE)
+            {
+                // The active field (or its window) moved/resized — re-anchor after a short debounce.
+                if (_fieldActive && hwnd == _activeHwnd && _targetResolver is not null)
+                {
+                    _locationDebounce!.Stop();
+                    _locationDebounce.Start();
+                }
 
-        if (idObject == OBJID_CURSOR)
+                return;
+            }
+
+            if (idObject == OBJID_CURSOR)
+            {
+                return;   // FOREGROUND/FOCUS for the mouse cursor — not a real focus change
+            }
+
+            HandleFocusChange(hwnd);
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
         {
-            return;   // FOREGROUND/FOCUS for the mouse cursor — not a real focus change
+            // Swallow — a bad event must never crash the watcher (or the app).
         }
-
-        HandleFocusChange(hwnd);
     }
 
     private void OnLocationDebounceTick(object? sender, EventArgs e)
@@ -147,7 +175,9 @@ public sealed class FocusWatcher : IFocusWatcher
         _locationDebounce!.Stop();
         if (_fieldActive && !_activeHwnd.IsNull)
         {
-            HandleFocusChange(_activeHwnd);
+            // Pure re-anchor: refresh the rect only; never re-decide activation (a transient
+            // non-editable resolve while dragging must not make the badge vanish mid-typing).
+            ResolveAndRaiseAsync(_activeHwnd, _activeExe, ++_focusGeneration, isReanchor: true);
         }
     }
 
@@ -159,7 +189,7 @@ public sealed class FocusWatcher : IFocusWatcher
             return;   // our own windows / unknown — leave current state untouched
         }
 
-        string? exePath = ResolveExe(pid);
+        string? exePath = ResolveExe(pid);   // cheap kernel call — fine on the pump thread
         var settings = _settingsProvider();
         if (exePath is null || !AppActivationPolicy.ShouldActivate(exePath, settings.Allowlist, settings.Blocklist))
         {
@@ -167,18 +197,64 @@ public sealed class FocusWatcher : IFocusWatcher
             return;
         }
 
-        FieldLocation? location = _targetResolver?.Resolve(hwnd);
-        if (_targetResolver is not null && location is { IsEditable: false })
-        {
-            Deactivate();   // allowlisted app, but the focused element is not an editable field
-            return;
-        }
-
+        // Allowlisted: mark active immediately (cheap) and resolve the field rect OFF the pump thread.
         _activeHwnd = hwnd;
+        _activeExe = Path.GetFileName(exePath);
         _fieldActive = true;
         EnsureLocationHook(threadId);
 
-        FieldFocused?.Invoke(this, new FocusedField(hwnd, Path.GetFileName(exePath), location?.Rect));
+        ResolveAndRaiseAsync(hwnd, _activeExe, ++_focusGeneration, isReanchor: false);
+    }
+
+    /// <summary>
+    /// Resolve the field (classification + rect) off the pump thread with a timeout, then marshal back
+    /// to raise <see cref="FieldFocused"/>. Stale results (a newer focus change has happened) are
+    /// dropped via <paramref name="generation"/>.
+    /// </summary>
+    private void ResolveAndRaiseAsync(HWND hwnd, string exeName, int generation, bool isReanchor)
+    {
+        if (_targetResolver is null)
+        {
+            FieldFocused?.Invoke(this, new FocusedField(hwnd, exeName, null));
+            return;
+        }
+
+        nint handle = hwnd;
+        _ = Task.Run(() =>
+        {
+            FieldLocation? location = ResolveWithTimeout(handle);
+            _dispatcher?.InvokeAsync(() =>
+            {
+                if (generation != _focusGeneration || !_fieldActive)
+                {
+                    return;   // superseded by a newer focus change
+                }
+
+                // On a genuine focus change a successfully-read non-editable element means "not a
+                // field" → hide. On a pure re-anchor we keep the field and only update the rect, so a
+                // transient non-editable/empty resolve never tears the badge down.
+                if (!isReanchor && location is { IsEditable: false })
+                {
+                    Deactivate();
+                    return;
+                }
+
+                FieldFocused?.Invoke(this, new FocusedField(handle, exeName, location?.Rect));
+            });
+        });
+    }
+
+    private FieldLocation? ResolveWithTimeout(nint hwnd)
+    {
+        try
+        {
+            var task = Task.Run(() => _targetResolver!.Resolve(hwnd));
+            return task.Wait(ResolveTimeoutMs) ? task.Result : null;
+        }
+        catch
+        {
+            return null;   // resolver faulted — treat as unresolved
+        }
     }
 
     private void EnsureLocationHook(uint threadId)
@@ -203,6 +279,7 @@ public sealed class FocusWatcher : IFocusWatcher
         _fieldActive = false;
         _activeHwnd = HWND.Null;
         _activeThreadId = 0;
+        _activeExe = string.Empty;
         _locationDebounce!.Stop();
         _locationHook?.Dispose();
         _locationHook = null;

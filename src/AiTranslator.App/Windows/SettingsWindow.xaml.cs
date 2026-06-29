@@ -73,15 +73,26 @@ public partial class SettingsWindow : Window
             Blocklist = ParseLines(BlocklistBox.Text),
         };
 
-        _settingsStore.Save(updated);
-
-        var key = ApiKeyBox.Password;
-        if (!string.IsNullOrWhiteSpace(key))
+        // Persist + apply side effects defensively: the credential write and the HKCU Run-key write
+        // can throw (interop / registry lock / policy). Surface a non-fatal message instead of letting
+        // an unhandled dispatcher exception crash the app.
+        try
         {
-            _secretStore.SetApiKey(key);
-        }
+            _settingsStore.Save(updated);
 
-        StartupManager.Apply(updated.RunAtStartup);
+            var key = ApiKeyBox.Password;
+            if (!string.IsNullOrWhiteSpace(key))
+            {
+                _secretStore.SetApiKey(key);
+            }
+
+            StartupManager.Apply(updated.RunAtStartup);
+        }
+        catch (Exception ex)
+        {
+            StatusText.Text = $"{UiStrings.SettingsSaveError} {ex.Message}";
+            return;
+        }
 
         _current = updated;
         StatusText.Text = UiStrings.SettingsSaved;

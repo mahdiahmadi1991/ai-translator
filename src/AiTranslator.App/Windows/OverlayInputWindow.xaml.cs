@@ -1,6 +1,7 @@
 using System.Text;
 using System.Windows;
 using System.Windows.Input;
+using System.Windows.Interop;
 using System.Windows.Threading;
 using AiTranslator.Core.Abstractions;
 using AiTranslator.Core.Models;
@@ -85,22 +86,15 @@ public partial class OverlayInputWindow : Window
         Top = area.Top + (area.Height * 0.70);
     }
 
-    /// <summary>Place the box just below the field. <paramref name="anchorPx"/> is physical pixels;
-    /// convert to DIPs via the window's source (PerMonitorV2). Falls back to bottom-centre if the
-    /// source is not ready.</summary>
+    /// <summary>Place the box just below the field, in physical pixels via <see cref="ScreenPlacement"/>
+    /// (so it lands on the field's own monitor at the right DPI — not the overlay's current monitor).
+    /// <paramref name="anchorPx"/> is physical pixels.</summary>
     private void PositionNear(System.Drawing.Rectangle anchorPx)
     {
-        var source = PresentationSource.FromVisual(this);
-        if (source?.CompositionTarget is null)
-        {
-            PositionNearBottomCenter();
-            return;
-        }
-
-        var dip = source.CompositionTarget.TransformFromDevice.Transform(
-            new Point(anchorPx.Left, anchorPx.Bottom));
-        Left = dip.X;
-        Top = dip.Y + 4;
+        double scale = ScreenPlacement.ScaleForPoint(anchorPx.Left, anchorPx.Bottom);
+        int gap = (int)Math.Round(4 * scale);
+        ScreenPlacement.MoveTopLeft(
+            new WindowInteropHelper(this).Handle, anchorPx.Left, anchorPx.Bottom + gap, topmost: false, activate: true);
     }
 
     private async void OnDebounceTick(object? sender, EventArgs e)

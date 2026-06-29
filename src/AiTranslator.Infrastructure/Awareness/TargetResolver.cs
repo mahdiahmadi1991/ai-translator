@@ -30,13 +30,12 @@ public sealed class TargetResolver : ITargetResolver
 
             return new FieldLocation(IsEditable(focused), ReadRect(focused));
         }
-        catch (Exception ex) when (ex is ElementNotAvailableException
-                                      or ElementNotEnabledException
-                                      or System.Runtime.InteropServices.COMException
-                                      or InvalidOperationException
-                                      or TimeoutException)
+        catch (Exception ex) when (ex is not OutOfMemoryException)
         {
-            return null;   // element vanished / provider not ready — caller treats as "unresolved"
+            // Any UIA/COM failure (element vanished, provider mid-teardown, ArgumentException/
+            // Win32Exception from a flaky Chromium/Electron provider, …) is "unresolved", never a
+            // crash — this runs on a thread whose unhandled exception would kill the process.
+            return null;
         }
     }
 

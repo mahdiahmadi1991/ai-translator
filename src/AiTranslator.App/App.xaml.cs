@@ -172,10 +172,12 @@ public partial class App : Application
         _activeField = null;
     }
 
-    // The watcher raises events on its own STA thread — marshal to the UI thread before touching WPF.
-    private void OnFieldFocused(object? sender, FocusedField field) => Dispatcher.Invoke(() => ShowBadge(field));
+    // The watcher raises events on its own STA thread — marshal to the UI thread. Use the NON-blocking
+    // InvokeAsync so the watcher thread never waits on the UI thread (a blocking Invoke would deadlock
+    // for ~2s against StopAwareness()'s Join during app exit / settings toggle).
+    private void OnFieldFocused(object? sender, FocusedField field) => Dispatcher.InvokeAsync(() => ShowBadge(field));
 
-    private void OnFieldUnfocused(object? sender, EventArgs e) => Dispatcher.Invoke(HideBadge);
+    private void OnFieldUnfocused(object? sender, EventArgs e) => Dispatcher.InvokeAsync(HideBadge);
 
     private void ShowBadge(FocusedField field)
     {

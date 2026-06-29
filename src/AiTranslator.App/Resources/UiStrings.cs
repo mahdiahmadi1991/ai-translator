@@ -35,4 +35,5 @@ public static class UiStrings
     public const string SettingsHotkeyTaken = "That hotkey is in use — pick another.";
     public const string SettingsHotkeyInvalid = "Not a valid hotkey (e.g. Ctrl+Alt+T).";
     public const string SettingsSaved = "Saved.";
+    public const string SettingsSaveError = "Couldn't fully save:";
 }
