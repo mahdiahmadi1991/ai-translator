@@ -24,7 +24,7 @@ public partial class OverlayInputWindow : Window
     private readonly ITextInjector _injector;
     private readonly ITargetResolver _resolver;
     private readonly Func<AppSettings> _settingsProvider;
-    private readonly DispatcherTimer _closeWatch;
+    private readonly DispatcherTimer _visibilityWatch;
 
     private FocusTarget _target;
     private CancellationTokenSource? _inflight;
@@ -56,28 +56,31 @@ public partial class OverlayInputWindow : Window
             // plain Enter is intentionally NOT handled: AcceptsReturn makes it insert a newline.
         };
 
-        // Auto-hide: when the box loses activation, wait briefly (the clipboard-paste fallback can
-        // momentarily foreground the target) then hide ONLY if focus truly went elsewhere — i.e. the
-        // foreground is neither this box nor the target field. Hiding preserves the draft; re-activation
-        // cancels the pending hide.
-        _closeWatch = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(200) };
-        _closeWatch.Tick += OnCloseWatchTick;
-        Deactivated += (_, _) =>
+        // Auto-hide: while the box is visible, poll the foreground window; if it is neither this box
+        // nor the target field, hide (preserving the draft). Polling is more reliable than
+        // Window.Deactivated, which never fires if the box never actually took activation.
+        _visibilityWatch = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(300) };
+        _visibilityWatch.Tick += OnVisibilityWatchTick;
+        IsVisibleChanged += (_, e) =>
         {
-            _closeWatch.Stop();
-            _closeWatch.Start();
+            if ((bool)e.NewValue)
+            {
+                _visibilityWatch.Start();
+            }
+            else
+            {
+                _visibilityWatch.Stop();
+            }
         };
-        Activated += (_, _) => _closeWatch.Stop();
     }
 
-    private void OnCloseWatchTick(object? sender, EventArgs e)
+    private void OnVisibilityWatchTick(object? sender, EventArgs e)
     {
-        _closeWatch.Stop();
         nint foreground = ScreenPlacement.ForegroundWindow();
         nint self = new WindowInteropHelper(this).Handle;
         if (foreground != self && foreground != _target.WindowHandle)
         {
-            Hide();   // preserve the draft; the box reappears (with its text) on the next badge/hotkey
+            Hide();   // focus is neither the box nor the target → get out of the way (draft preserved)
         }
     }
 
@@ -172,13 +175,16 @@ public partial class OverlayInputWindow : Window
             var translation = sb.ToString();
 
             // Preferred: set the field's value directly via UIA — no focus move. Fallback: clipboard
-            // paste (briefly foregrounds the target, then we return focus here).
+            // paste (briefly foregrounds the target).
             if (!_resolver.TrySetText(_target.WindowHandle, translation))
             {
                 await _injector.ReplaceTextAsync(_target, translation, ct);
-                Activate();
-                Input.Focus();
             }
+
+            // Success: clear the draft and dismiss the box (focus returns to the messenger).
+            Input.Clear();
+            ClearStatus();
+            Hide();
         }
         catch (OperationCanceledException)
         {
@@ -214,7 +220,7 @@ public partial class OverlayInputWindow : Window
 
     protected override void OnClosed(EventArgs e)
     {
-        _closeWatch.Stop();
+        _visibilityWatch.Stop();
         _inflight?.Cancel();
         _inflight?.Dispose();
         base.OnClosed(e);
