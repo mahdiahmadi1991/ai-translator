@@ -31,6 +31,9 @@ public sealed class FocusWatcher : IFocusWatcher
     private const int LocationDebounceMs = 80;           // coalesce LOCATIONCHANGE bursts
     private const int ResolveTimeoutMs = 250;            // ADR-0003: never block on UIA without a bound
 
+    // Optional diagnostic trace: set AITR_FOCUS_LOG=1 (→ %TEMP%\ai-translator-focus.log) or to a path.
+    private static readonly string? DebugLogPath = ResolveDebugLogPath();
+
     private readonly Func<AppSettings> _settingsProvider;
     private readonly ITargetResolver? _targetResolver;
     private readonly uint _ownProcessId = (uint)Environment.ProcessId;
@@ -147,8 +150,10 @@ public sealed class FocusWatcher : IFocusWatcher
 
             if (@event == PInvoke.EVENT_OBJECT_LOCATIONCHANGE)
             {
-                // The active field (or its window) moved/resized — re-anchor after a short debounce.
-                if (_fieldActive && hwnd == _activeHwnd && _targetResolver is not null)
+                // Something on the active window's thread moved/resized — re-anchor after a debounce.
+                // The location hook is already scoped to the active thread, so any event it delivers
+                // is relevant.
+                if (_fieldActive && _targetResolver is not null)
                 {
                     _locationDebounce!.Stop();
                     _locationDebounce.Start();
@@ -162,7 +167,7 @@ public sealed class FocusWatcher : IFocusWatcher
                 return;   // FOREGROUND/FOCUS for the mouse cursor — not a real focus change
             }
 
-            HandleFocusChange(hwnd);
+            HandleFocusChange();
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
@@ -181,9 +186,19 @@ public sealed class FocusWatcher : IFocusWatcher
         }
     }
 
-    private void HandleFocusChange(HWND hwnd)
+    private void HandleFocusChange()
     {
-        uint threadId = PInvoke.GetWindowThreadProcessId(hwnd, out uint pid);
+        // Identify the app by the FOREGROUND top-level window, not the focus-event hwnd. For WebView2
+        // apps (e.g. WhatsApp) the focus event's window belongs to msedgewebview2.exe, but the visible
+        // app — and the right injection target — is the foreground window (WhatsApp.Root.exe). The
+        // field itself is resolved separately via UIA's system-wide focused element.
+        HWND fg = PInvoke.GetForegroundWindow();
+        if (fg.IsNull)
+        {
+            return;
+        }
+
+        uint threadId = PInvoke.GetWindowThreadProcessId(fg, out uint pid);
         if (pid == 0 || pid == _ownProcessId)
         {
             return;   // our own windows / unknown — leave current state untouched
@@ -191,19 +206,23 @@ public sealed class FocusWatcher : IFocusWatcher
 
         string? exePath = ResolveExe(pid);   // cheap kernel call — fine on the pump thread
         var settings = _settingsProvider();
-        if (exePath is null || !AppActivationPolicy.ShouldActivate(exePath, settings.Allowlist, settings.Blocklist))
+        bool allow = exePath is not null
+            && AppActivationPolicy.ShouldActivate(exePath, settings.Allowlist, settings.Blocklist);
+        DebugLog($"focus: fg=0x{(nint)fg:X} pid={pid} exe='{exePath}' allow={allow}");
+
+        if (!allow)
         {
             Deactivate();
             return;
         }
 
         // Allowlisted: mark active immediately (cheap) and resolve the field rect OFF the pump thread.
-        _activeHwnd = hwnd;
-        _activeExe = Path.GetFileName(exePath);
+        _activeHwnd = fg;
+        _activeExe = Path.GetFileName(exePath!);
         _fieldActive = true;
         EnsureLocationHook(threadId);
 
-        ResolveAndRaiseAsync(hwnd, _activeExe, ++_focusGeneration, isReanchor: false);
+        ResolveAndRaiseAsync(fg, _activeExe, ++_focusGeneration, isReanchor: false);
     }
 
     /// <summary>
@@ -233,6 +252,8 @@ public sealed class FocusWatcher : IFocusWatcher
                 // On a genuine focus change a successfully-read non-editable element means "not a
                 // field" → hide. On a pure re-anchor we keep the field and only update the rect, so a
                 // transient non-editable/empty resolve never tears the badge down.
+                DebugLog($"resolve: gen={generation} reanchor={isReanchor} exe='{exeName}' editable={location?.IsEditable} rect={location?.Rect?.ToString() ?? "null"}");
+
                 if (!isReanchor && location is { IsEditable: false })
                 {
                     Deactivate();
@@ -311,5 +332,27 @@ public sealed class FocusWatcher : IFocusWatcher
         {
             return null;   // process exited / access denied — treat as "unknown"
         }
+    }
+
+    private static string? ResolveDebugLogPath()
+    {
+        var v = Environment.GetEnvironmentVariable("AITR_FOCUS_LOG");
+        if (string.IsNullOrWhiteSpace(v))
+        {
+            return null;
+        }
+
+        return v == "1" ? Path.Combine(Path.GetTempPath(), "ai-translator-focus.log") : v;
+    }
+
+    private static void DebugLog(string message)
+    {
+        if (DebugLogPath is null)
+        {
+            return;
+        }
+
+        try { File.AppendAllText(DebugLogPath, $"{DateTime.Now:HH:mm:ss.fff} {message}{Environment.NewLine}"); }
+        catch { /* diagnostics must never throw */ }
     }
 }

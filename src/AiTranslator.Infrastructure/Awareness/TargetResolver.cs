@@ -40,11 +40,13 @@ public sealed class TargetResolver : ITargetResolver
     }
 
     /// <summary>An editable text target: an enabled, keyboard-focusable, non-password Edit/Document
-    /// that exposes a writable ValuePattern or a TextPattern.</summary>
+    /// that exposes a writable ValuePattern, or an Edit backed by a TextPattern.</summary>
     private static bool IsEditable(AutomationElement element)
     {
         var info = element.Current;
-        if (info.ControlType != ControlType.Edit && info.ControlType != ControlType.Document)
+        bool isEdit = info.ControlType == ControlType.Edit;
+        bool isDoc = info.ControlType == ControlType.Document;
+        if (!isEdit && !isDoc)
         {
             return false;
         }
@@ -54,13 +56,17 @@ public sealed class TargetResolver : ITargetResolver
             return false;
         }
 
-        if (element.TryGetCurrentPattern(ValuePattern.Pattern, out var value))
+        // A writable ValuePattern is the clearest signal (e.g. Telegram's Ui::InputField).
+        if (element.TryGetCurrentPattern(ValuePattern.Pattern, out var value)
+            && !((ValuePattern)value).Current.IsReadOnly)
         {
-            return !((ValuePattern)value).Current.IsReadOnly;
+            return true;
         }
 
-        // No ValuePattern: a TextPattern still means a typeable surface (e.g. rich editors).
-        return element.TryGetCurrentPattern(TextPattern.Pattern, out _);
+        // Otherwise an Edit backed by a TextPattern is still typeable — the WhatsApp/Chromium case,
+        // where the contenteditable exposes a READ-ONLY ValuePattern but a real TextPattern. A Document
+        // without a writable value is treated as read-only content (a web page), not a field.
+        return isEdit && element.TryGetCurrentPattern(TextPattern.Pattern, out _);
     }
 
     private static Rectangle? ReadRect(AutomationElement element)
