@@ -29,7 +29,9 @@ public sealed class FocusWatcher : IFocusWatcher
 {
     private const int OBJID_CURSOR = -9;                 // skip mouse-cursor object noise on FOCUS
     private const int LocationDebounceMs = 80;           // coalesce LOCATIONCHANGE bursts
-    private const int ResolveTimeoutMs = 600;            // ADR-0003: bounded UIA — room for a one-shot WebView2 a11y wake
+    private const int ResolveTimeoutMs = 600;            // ADR-0003: bounded UIA — room for the WebView2 drill
+    private const int RetryDelayMs = 140;                // re-poll cadence while a woken WebView2 tree builds
+    private const int MaxResolveRetries = 8;             // ~1.1s of self-driven retries (no external event needed)
 
     // Optional diagnostic trace: set AITR_FOCUS_LOG=1 (→ %TEMP%\ai-translator-focus.log) or to a path.
     private static readonly string? DebugLogPath = ResolveDebugLogPath();
@@ -42,6 +44,7 @@ public sealed class FocusWatcher : IFocusWatcher
     private Thread? _thread;
     private Dispatcher? _dispatcher;
     private DispatcherTimer? _locationDebounce;
+    private DispatcherTimer? _retryTimer;                 // self-driven re-resolve while a WebView2 tree builds
     private WINEVENTPROC? _proc;                          // rooted so the GC never moves/collects it
     private UnhookWinEventSafeHandle? _foregroundHook;
     private UnhookWinEventSafeHandle? _focusHook;
@@ -52,6 +55,8 @@ public sealed class FocusWatcher : IFocusWatcher
     private string _activeExe = string.Empty;
     private bool _fieldActive;
     private int _focusGeneration;                         // drops resolves from superseded focus changes
+    private int _retryCount;                              // bounds the self-driven Pending retries per focus
+    private volatile bool _resolveInFlight;               // drops piled-up re-anchors during event bursts
 
     /// <param name="settingsProvider">Supplies the current settings (allowlist/blocklist) per event.</param>
     /// <param name="targetResolver">
@@ -115,6 +120,11 @@ public sealed class FocusWatcher : IFocusWatcher
             Interval = TimeSpan.FromMilliseconds(LocationDebounceMs),
         };
         _locationDebounce.Tick += OnLocationDebounceTick;
+        _retryTimer = new DispatcherTimer(DispatcherPriority.Background, _dispatcher)
+        {
+            Interval = TimeSpan.FromMilliseconds(RetryDelayMs),
+        };
+        _retryTimer.Tick += OnRetryTick;
         _ready.Set();   // publish the dispatcher before Stop() can act on it
 
         _foregroundHook = Hook(PInvoke.EVENT_SYSTEM_FOREGROUND);
@@ -124,6 +134,7 @@ public sealed class FocusWatcher : IFocusWatcher
 
         // Dispatcher has shut down — release the hooks on this (the installing) thread.
         _locationDebounce.Stop();
+        _retryTimer?.Stop();
         _locationHook?.Dispose();
         _focusHook?.Dispose();
         _foregroundHook?.Dispose();
@@ -222,6 +233,8 @@ public sealed class FocusWatcher : IFocusWatcher
         _fieldActive = true;
         EnsureLocationHook(threadId);
 
+        _retryCount = 0;          // a fresh focus starts a fresh Pending-retry budget
+        _retryTimer?.Stop();
         ResolveAndRaiseAsync(fg, _activeExe, ++_focusGeneration, isReanchor: false);
     }
 
@@ -238,10 +251,21 @@ public sealed class FocusWatcher : IFocusWatcher
             return;
         }
 
+        // Drop a piled-up re-anchor while a resolve is already running (event bursts during typing /
+        // scrolling). A genuine focus change is never dropped — it supersedes via the generation.
+        if (isReanchor && _resolveInFlight)
+        {
+            return;
+        }
+
         nint handle = hwnd;
         _ = Task.Run(() =>
         {
-            FieldLocation? location = ResolveWithTimeout(handle);
+            _resolveInFlight = true;
+            FieldResolution resolution;
+            try { resolution = ResolveWithTimeout(handle); }
+            finally { _resolveInFlight = false; }
+
             _dispatcher?.InvokeAsync(() =>
             {
                 if (generation != _focusGeneration || !_fieldActive)
@@ -249,32 +273,81 @@ public sealed class FocusWatcher : IFocusWatcher
                     return;   // superseded by a newer focus change
                 }
 
-                // On a genuine focus change a successfully-read non-editable element means "not a
-                // field" → hide. On a pure re-anchor we keep the field and only update the rect, so a
-                // transient non-editable/empty resolve never tears the badge down.
-                DebugLog($"resolve: gen={generation} reanchor={isReanchor} exe='{exeName}' editable={location?.IsEditable} rect={location?.Rect?.ToString() ?? "null"}");
+                DebugLog($"resolve: gen={generation} reanchor={isReanchor} exe='{exeName}' status={resolution.Status} rect={resolution.Rect?.ToString() ?? "null"}");
 
-                if (!isReanchor && location is { IsEditable: false })
+                switch (resolution.Status)
                 {
-                    Deactivate();
-                    return;
-                }
+                    case FieldStatus.Editable:
+                        _retryTimer?.Stop();
+                        FieldFocused?.Invoke(this, new FocusedField(handle, exeName, resolution.Rect));
+                        break;
 
-                FieldFocused?.Invoke(this, new FocusedField(handle, exeName, location?.Rect));
+                    case FieldStatus.Pending:
+                        // A WebView2 renderer was woken and its a11y tree is still building. Don't touch
+                        // the badge; retry shortly so we don't depend on a foreground-thread event that
+                        // won't fire for the (separate-thread) tree build.
+                        ScheduleRetry(generation);
+                        break;
+
+                    case FieldStatus.NotEditable:
+                        // A genuine non-editable element means "not a field" → hide. On a pure re-anchor
+                        // we keep the field (a transient non-editable resolve must never tear it down).
+                        if (!isReanchor)
+                        {
+                            Deactivate();
+                        }
+
+                        break;
+
+                    case FieldStatus.Unknown:
+                        // Focus undeterminable (transient UIA glitch). Preserve the M1 behaviour on a
+                        // genuine focus change; never tear down on a re-anchor.
+                        if (!isReanchor)
+                        {
+                            FieldFocused?.Invoke(this, new FocusedField(handle, exeName, null));
+                        }
+
+                        break;
+                }
             });
         });
     }
 
-    private FieldLocation? ResolveWithTimeout(nint hwnd)
+    /// <summary>Re-run the resolve for the still-active field after a short delay (a woken WebView2
+    /// tree builds asynchronously). Bounded by <see cref="MaxResolveRetries"/> per focus change.</summary>
+    private void ScheduleRetry(int generation)
+    {
+        if (generation != _focusGeneration || !_fieldActive || _retryCount >= MaxResolveRetries)
+        {
+            return;
+        }
+
+        _retryTimer!.Stop();
+        _retryTimer.Start();   // one-shot: OnRetryTick stops it
+    }
+
+    private void OnRetryTick(object? sender, EventArgs e)
+    {
+        _retryTimer!.Stop();
+        if (!_fieldActive || _activeHwnd.IsNull)
+        {
+            return;
+        }
+
+        _retryCount++;
+        ResolveAndRaiseAsync(_activeHwnd, _activeExe, _focusGeneration, isReanchor: false);
+    }
+
+    private FieldResolution ResolveWithTimeout(nint hwnd)
     {
         try
         {
             var task = Task.Run(() => _targetResolver!.Resolve(hwnd));
-            return task.Wait(ResolveTimeoutMs) ? task.Result : null;
+            return task.Wait(ResolveTimeoutMs) ? task.Result : FieldResolution.Unknown;
         }
         catch
         {
-            return null;   // resolver faulted — treat as unresolved
+            return FieldResolution.Unknown;   // resolver faulted — treat as unresolved
         }
     }
 
@@ -302,6 +375,8 @@ public sealed class FocusWatcher : IFocusWatcher
         _activeThreadId = 0;
         _activeExe = string.Empty;
         _locationDebounce!.Stop();
+        _retryTimer?.Stop();
+        _retryCount = 0;
         _locationHook?.Dispose();
         _locationHook = null;
 

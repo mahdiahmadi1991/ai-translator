@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Drawing;
 using System.IO;
 using System.Runtime.InteropServices;
@@ -10,33 +11,35 @@ namespace AiTranslator.Infrastructure.Awareness;
 /// Classifies and locates the focused element of a window via UI Automation (M2 Task 3, ADR-0003).
 /// Uses the managed <see cref="AutomationElement"/> client, which ships in the WindowsDesktop
 /// framework (no extra package — important for the offline build) and is understood by Win32, WPF,
-/// and modern Chromium/WebView2/Electron (which expose a UIA provider once a UIA client is active).
+/// and modern Chromium/WebView2/Electron.
 /// </summary>
 /// <remarks>
-/// Scope note: this resolves the focused element's <see cref="AutomationElement.Current"/> bounding
-/// rectangle (physical pixels). Caret-precise placement (TextPattern2 / GetGUIThreadInfo) is deferred
-/// until manual per-app testing shows it is needed — modern UIA covers the common cases.
+/// The WhatsApp case (diagnosed from %TEMP%\ai-translator-focus.log): WhatsApp is a WinUI 3 app
+/// hosting WebView2. The OS-wide <see cref="AutomationElement.FocusedElement"/> stops at the WinUI
+/// host panes (Microsoft.UI.Content.DesktopChildSiteBridge / InputSite) and never crosses the
+/// ContentIsland boundary into the Chromium <c>contenteditable</c>. So when the focused element is not
+/// itself editable we (1) find the real Chromium render-widget HWNDs parented under the foreground
+/// window, (2) "wake" each one's accessibility tree with the MSAA <c>AccessibleObjectFromWindow</c>
+/// handshake (what screen readers use), then (3) re-query the OS-wide focus and, failing that, drill
+/// directly into each render widget's UIA subtree for the focused editable element.
 ///
-/// WebView2 wake (the WhatsApp case): a Chromium renderer builds its accessibility tree lazily, only
-/// once an MSAA/UIA client asks for it. Until then <see cref="AutomationElement.FocusedElement"/>
-/// returns the renderer's root pane (a full-window, non-editable element) instead of the focused
-/// <c>contenteditable</c>. We detect that and "wake" the renderer with a one-shot
-/// <c>AccessibleObjectFromWindow(OBJID_CLIENT)</c> (the standard handshake screen readers use), then
-/// re-query the focused element. The wake is per-HWND and cached so we pay it once per renderer.
+/// A freshly woken renderer builds its tree asynchronously, so <see cref="Resolve"/> never blocks
+/// waiting for it: while a render widget is within its post-wake grace window and nothing editable has
+/// surfaced yet, it returns <see cref="FieldStatus.Pending"/> so the caller retries shortly instead of
+/// tearing the badge down. The wake side effect is recorded per-HWND with a timestamp.
 /// </remarks>
 public sealed class TargetResolver : ITargetResolver
 {
     private const uint OBJID_CLIENT = 0xFFFFFFFC;
-    private const int WakeRetries = 5;          // poll the focused element after waking the renderer
-    private const int WakeRetryDelayMs = 60;    // ~300ms total — bounded by FocusWatcher's resolve timeout
+    private const long WakeGraceMs = 1500;   // how long after a wake we keep reporting Pending
 
     private static readonly Guid IID_IAccessible = new("618736E0-3C3D-11CF-810C-00AA00389B71");
 
     private readonly int _ownProcessId = Environment.ProcessId;
-    private readonly HashSet<nint> _wokenRenderers = new();
+    private readonly Dictionary<nint, long> _wokenAt = new();   // render HWND → TickCount64 of its wake
     private readonly object _wokenLock = new();
 
-    public FieldLocation? Resolve(nint windowHandle)
+    public FieldResolution Resolve(nint windowHandle)
     {
         try
         {
@@ -44,14 +47,13 @@ public sealed class TargetResolver : ITargetResolver
             if (focused is null)
             {
                 Log("focusedElement: <null>");
-                return null;
+                return FieldResolution.Unknown;
             }
 
-            // Never treat our own floating box as a target (it has focus while the user types) —
-            // that would mis-anchor the badge.
+            // Never treat our own floating box as a target (it has focus while the user types).
             if (focused.Current.ProcessId == _ownProcessId)
             {
-                return null;
+                return FieldResolution.Unknown;
             }
 
             if (IsEditable(focused))
@@ -59,89 +61,102 @@ public sealed class TargetResolver : ITargetResolver
                 return Describe(focused, "direct");
             }
 
-            // Non-editable focused element. In a Chromium/WebView2 host (WhatsApp, …) this is the
-            // un-woken renderer root: wake it and re-query for the real contenteditable.
-            var woken = TryWakeAndResolve(focused, windowHandle);
-            if (woken is not null)
-            {
-                return woken;
-            }
-
-            return Describe(focused, "non-editable");
+            // Non-editable focused element: maybe a WebView2/Chromium host whose tree isn't reachable.
+            return TryResolveWebView(focused, windowHandle);
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
-            // Any UIA/COM failure (element vanished, provider mid-teardown, ArgumentException/
-            // Win32Exception from a flaky Chromium/Electron provider, …) is "unresolved", never a
-            // crash — this runs on a thread whose unhandled exception would kill the process.
-            return null;
+            // Any UIA/COM failure is "unresolved", never a crash — the caller runs on a thread whose
+            // unhandled exception would kill the process.
+            return FieldResolution.Unknown;
         }
     }
 
     /// <summary>
-    /// Wake the renderer that owns the (non-editable) focused element, then poll for the focused
-    /// editable element the now-built accessibility tree exposes. Returns null if nothing editable
-    /// surfaces within the budget — a later focus/location event re-resolves once the tree is ready.
+    /// Find the Chromium render-widget HWND(s) under the foreground window, wake their accessibility
+    /// trees, then resolve the focused editable element via the OS-wide focus (fast path) or by
+    /// drilling into each render widget's UIA subtree (fallback). Non-blocking: if a renderer was just
+    /// woken and nothing editable has surfaced yet, reports <see cref="FieldStatus.Pending"/>.
     /// </summary>
-    private FieldLocation? TryWakeAndResolve(AutomationElement root, nint foreground)
+    private FieldResolution TryResolveWebView(AutomationElement focusedRoot, nint foreground)
     {
-        nint rootHwnd = SafeNativeWindowHandle(root);
-        nint primary = rootHwnd != 0 ? rootHwnd : foreground;
+        var renderHwnds = FindChromiumWindows(foreground);
 
-        // Already woken this renderer and the focus is still non-editable → it is genuinely a
-        // non-editable element (a button, the page body). Don't burn the retry budget re-polling.
-        lock (_wokenLock)
+        // Also consider the focused element's own native window — covers a plain (non-WinUI) Chromium
+        // host where FocusedElement returns the render root directly.
+        nint focusedHwnd = SafeNativeWindowHandle(focusedRoot);
+        if (focusedHwnd != 0 && !renderHwnds.Contains(focusedHwnd))
         {
-            if (primary != 0 && _wokenRenderers.Contains(primary))
+            renderHwnds.Insert(0, focusedHwnd);
+        }
+
+        if (renderHwnds.Count == 0)
+        {
+            Log("webview: no Chromium/native render windows found under foreground");
+            return Describe(focusedRoot, "non-editable");
+        }
+
+        foreach (nint h in renderHwnds)
+        {
+            WakeOnce(h);
+        }
+
+        Log($"webview: renders=[{DescribeHwnds(renderHwnds)}]");
+
+        // Fast path: after waking, the OS-wide focus may now resolve into the Chromium contenteditable.
+        var osFocused = SafeFocusedElement();
+        if (osFocused is not null && osFocused.Current.ProcessId != _ownProcessId && IsEditable(osFocused))
+        {
+            return Describe(osFocused, "woken-os-focus");
+        }
+
+        // Fallback: drill into each render widget's own UIA subtree for the focused editable element.
+        foreach (nint h in renderHwnds)
+        {
+            var field = DrillFocusedEditable(h);
+            if (field is not null)
+            {
+                return field;
+            }
+        }
+
+        // Nothing editable yet. If a renderer is still within its post-wake grace window the tree is
+        // probably still building → ask the caller to retry; otherwise it is genuinely non-editable.
+        return RecentlyWoken(renderHwnds)
+            ? FieldResolution.Pending
+            : Describe(focusedRoot, "non-editable");
+    }
+
+    /// <summary>Locate the focused editable element inside a single render widget's UIA subtree.
+    /// FindFirst executes provider-side (one cross-process call, not one per node).</summary>
+    private FieldResolution? DrillFocusedEditable(nint hwnd)
+    {
+        try
+        {
+            var root = AutomationElement.FromHandle(hwnd);
+            if (root is null)
             {
                 return null;
             }
-        }
 
-        WakeAccessibility(rootHwnd);
-        if (foreground != 0 && foreground != rootHwnd)
-        {
-            WakeAccessibility(foreground);
-        }
+            var focused = root.FindFirst(
+                TreeScope.Descendants,
+                new PropertyCondition(AutomationElement.HasKeyboardFocusProperty, true));
 
-        lock (_wokenLock)
-        {
-            if (primary != 0)
+            if (focused is null)
             {
-                if (_wokenRenderers.Count > 128)
-                {
-                    _wokenRenderers.Clear();   // bound the cache; re-waking is cheap
-                }
-
-                _wokenRenderers.Add(primary);
-            }
-        }
-
-        for (int i = 0; i < WakeRetries; i++)
-        {
-            Thread.Sleep(WakeRetryDelayMs);
-
-            AutomationElement? focused;
-            try { focused = AutomationElement.FocusedElement; }
-            catch { focused = null; }
-
-            if (focused is null || focused.Current.ProcessId == _ownProcessId)
-            {
-                continue;
+                Log($"  drill 0x{hwnd:X}: no focused descendant");
+                return null;
             }
 
-            if (IsEditable(focused))
-            {
-                Log($"woke renderer 0x{primary:X} after ~{(i + 1) * WakeRetryDelayMs}ms");
-                return Describe(focused, "woken");
-            }
-
-            // Still non-editable after waking — log what the tree now reports so we can refine
-            // IsEditable for this app even if it isn't accepted yet.
-            Log($"  woke-attempt {i + 1}: {Snapshot(focused)}");
+            Log($"  drill 0x{hwnd:X} focused: {Snapshot(focused)}");
+            return IsEditable(focused) ? Describe(focused, "drilled") : null;
         }
-
-        return null;
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            Log($"  drill 0x{hwnd:X}: {ex.GetType().Name}");
+            return null;
+        }
     }
 
     /// <summary>An editable text target: an enabled, keyboard-focusable, non-password Edit/Document
@@ -169,9 +184,9 @@ public sealed class TargetResolver : ITargetResolver
         }
 
         // Otherwise a Chromium contenteditable (role="textbox", e.g. WhatsApp's message box) maps to
-        // ControlType.Edit with a READ-ONLY ValuePattern but a real, text-selecting TextPattern. We
-        // keep the Edit requirement so a static web page's Document (also TextPattern-capable for
-        // screen readers) is never mistaken for a field.
+        // ControlType.Edit with a READ-ONLY ValuePattern but a real, text-selecting TextPattern. We keep
+        // the Edit requirement so a static web page's Document (also TextPattern-capable for screen
+        // readers) is never mistaken for a field.
         return isEdit
             && element.TryGetCurrentPattern(TextPattern.Pattern, out var text)
             && ((TextPattern)text).SupportedTextSelection != SupportedTextSelection.None;
@@ -188,21 +203,110 @@ public sealed class TargetResolver : ITargetResolver
         return new Rectangle((int)r.X, (int)r.Y, (int)r.Width, (int)r.Height);
     }
 
-    private static nint SafeNativeWindowHandle(AutomationElement element)
+    // --- Chromium window discovery + accessibility wake ----------------------------------------
+
+    private static List<nint> FindChromiumWindows(nint top)
     {
-        try { return element.Current.NativeWindowHandle; }
-        catch { return 0; }
+        var found = new List<nint>();
+        if (top == 0)
+        {
+            return found;
+        }
+
+        try
+        {
+            // EnumChildWindows recurses through all descendants, crossing process boundaries for
+            // parented children — so the msedgewebview2 render widget nested in WhatsApp is included.
+            EnumChildWindows(top, (h, _) =>
+            {
+                if (ClassOf(h).StartsWith("Chrome_", StringComparison.Ordinal))
+                {
+                    found.Add(h);
+                }
+
+                return true;
+            }, 0);
+        }
+        catch { /* enumeration is best-effort */ }
+
+        // Wake/drill the actual renderer first; its widget-host parents are lower priority.
+        found.Sort((a, b) => RenderRank(ClassOf(a)).CompareTo(RenderRank(ClassOf(b))));
+        return found;
     }
 
-    // Send the MSAA WM_GETOBJECT(OBJID_CLIENT) handshake to a window; Chromium responds by building
-    // its accessibility tree. We don't need the object itself — only the side effect — so release it.
-    private static void WakeAccessibility(nint hwnd)
+    private static int RenderRank(string cls) =>
+        cls == "Chrome_RenderWidgetHostHWND" ? 0 : 1;
+
+    /// <summary>Wake a window's accessibility tree the first time we see it, recording when.</summary>
+    private void WakeOnce(nint hwnd)
     {
         if (hwnd == 0)
         {
             return;
         }
 
+        bool first;
+        lock (_wokenLock)
+        {
+            first = !_wokenAt.ContainsKey(hwnd);
+            _wokenAt[hwnd] = Environment.TickCount64;
+            if (_wokenAt.Count > 256)
+            {
+                PruneWoken();   // bound the cache; re-waking is cheap
+            }
+        }
+
+        if (first)
+        {
+            WakeAccessibility(hwnd);
+        }
+    }
+
+    /// <summary>True while any of the given render windows is within its post-wake grace window.</summary>
+    private bool RecentlyWoken(List<nint> hwnds)
+    {
+        long now = Environment.TickCount64;
+        lock (_wokenLock)
+        {
+            foreach (nint h in hwnds)
+            {
+                if (_wokenAt.TryGetValue(h, out long t) && now - t < WakeGraceMs)
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    private void PruneWoken()
+    {
+        long now = Environment.TickCount64;
+        var stale = new List<nint>();
+        foreach (var kv in _wokenAt)
+        {
+            if (now - kv.Value >= WakeGraceMs)
+            {
+                stale.Add(kv.Key);
+            }
+        }
+
+        foreach (nint h in stale)
+        {
+            _wokenAt.Remove(h);
+        }
+
+        if (_wokenAt.Count > 256)
+        {
+            _wokenAt.Clear();   // pathological fallback
+        }
+    }
+
+    // Send the MSAA WM_GETOBJECT(OBJID_CLIENT) handshake; Chromium responds by building its a11y tree.
+    // We don't need the object itself — only the side effect — so release it.
+    private static void WakeAccessibility(nint hwnd)
+    {
         try
         {
             var iid = IID_IAccessible;
@@ -211,8 +315,38 @@ public sealed class TargetResolver : ITargetResolver
                 Marshal.ReleaseComObject(acc);
             }
         }
-        catch { /* wake is best-effort; a failure just means no badge for this element */ }
+        catch { /* wake is best-effort */ }
     }
+
+    private static nint SafeNativeWindowHandle(AutomationElement element)
+    {
+        try { return element.Current.NativeWindowHandle; }
+        catch { return 0; }
+    }
+
+    private static AutomationElement? SafeFocusedElement()
+    {
+        try { return AutomationElement.FocusedElement; }
+        catch { return null; }
+    }
+
+    private static string ClassOf(nint hwnd)
+    {
+        var buf = new char[256];
+        int n = GetClassName(hwnd, buf, buf.Length);
+        return n > 0 ? new string(buf, 0, n) : string.Empty;
+    }
+
+    // --- P/Invoke (raw DllImport; CsWin32 is used elsewhere but these are local to the resolver) ---
+
+    private delegate bool EnumWindowsProc(nint hWnd, nint lParam);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool EnumChildWindows(nint hWndParent, EnumWindowsProc lpEnumFunc, nint lParam);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode, EntryPoint = "GetClassNameW")]
+    private static extern int GetClassName(nint hWnd, [Out] char[] lpClassName, int nMaxCount);
 
     [DllImport("oleacc.dll")]
     private static extern int AccessibleObjectFromWindow(
@@ -221,11 +355,23 @@ public sealed class TargetResolver : ITargetResolver
 
     // --- diagnostics (shared log with the focus watcher; on by default, AITR_FOCUS_LOG=0 disables) ---
 
-    private FieldLocation Describe(AutomationElement element, string how)
+    private FieldResolution Describe(AutomationElement element, string how)
     {
-        var location = new FieldLocation(IsEditable(element), ReadRect(element));
-        Log($"focusedElement ({how}): {Snapshot(element)} → editable={location.IsEditable} rect={location.Rect?.ToString() ?? "null"}");
-        return location;
+        bool editable = IsEditable(element);
+        Rectangle? rect = editable ? ReadRect(element) : null;
+        Log($"focusedElement ({how}): {Snapshot(element)} → editable={editable} rect={rect?.ToString() ?? "null"}");
+        return editable ? FieldResolution.Editable(rect) : FieldResolution.NotEditable;
+    }
+
+    private static string DescribeHwnds(List<nint> hwnds)
+    {
+        var parts = new List<string>(hwnds.Count);
+        foreach (nint h in hwnds)
+        {
+            parts.Add($"0x{h:X}:{ClassOf(h)}");
+        }
+
+        return string.Join(", ", parts);
     }
 
     private static string Snapshot(AutomationElement e) =>
