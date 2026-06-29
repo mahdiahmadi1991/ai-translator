@@ -67,6 +67,7 @@ public partial class OverlayInputWindow : Window
         _target = target;
         Input.Clear();
         Show();
+        UpdateLayout();   // force measure/arrange so ActualWidth/Height are valid before positioning
         if (anchor is { } a)
         {
             PositionNear(a);
@@ -93,8 +94,13 @@ public partial class OverlayInputWindow : Window
     private void PositionNear(System.Drawing.Rectangle anchorPx)
     {
         double scale = ScreenPlacement.ScaleForPoint(anchorPx.Left, anchorPx.Bottom);
-        int winW = (int)Math.Round(ActualWidth * scale);
-        int winH = (int)Math.Round(ActualHeight * scale);
+
+        // Fall back to design sizes if layout hasn't produced an actual size yet, so the flip/clamp
+        // math is never fed a zero height (which would let the box overflow off-screen).
+        double wDip = ActualWidth > 10 ? ActualWidth : Width;
+        double hDip = ActualHeight > 10 ? ActualHeight : 160;
+        int winW = (int)Math.Round(wDip * scale);
+        int winH = (int)Math.Round(hDip * scale);
         int gap = (int)Math.Round(6 * scale);
 
         var (x, y) = ScreenPlacement.PlaceNearField(anchorPx, winW, winH, gap);

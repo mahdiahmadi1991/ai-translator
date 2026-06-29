@@ -3,40 +3,168 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:res="clr-namespace:AiTranslator.App.Resources"
         Title="{x:Static res:UiStrings.SettingsTitle}"
-        Width="460"
-        SizeToContent="Height"
-        ResizeMode="NoResize"
-        WindowStartupLocation="CenterScreen">
-    <StackPanel Margin="18">
-        <TextBlock Text="{x:Static res:UiStrings.SettingsApiKey}" Margin="0,0,0,2" />
-        <PasswordBox x:Name="ApiKeyBox" Margin="0,0,0,12" />
+        Width="500" Height="640" MinWidth="420" MinHeight="420"
+        WindowStartupLocation="CenterScreen"
+        Background="#FF1B1B1F"
+        TextOptions.TextFormattingMode="Ideal"
+        FontFamily="Segoe UI" FontSize="13">
 
-        <TextBlock Text="{x:Static res:UiStrings.SettingsPrimaryLang}" Margin="0,0,0,2" />
-        <TextBox x:Name="PrimaryBox" Margin="0,0,0,12" />
+    <Window.Resources>
+        <!-- Field label -->
+        <Style x:Key="Label" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="#FFCFCFD4" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="Margin" Value="0,0,0,4" />
+        </Style>
+        <Style x:Key="Hint" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="#FF8A8A93" />
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="Margin" Value="0,3,0,0" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+        </Style>
 
-        <TextBlock Text="{x:Static res:UiStrings.SettingsSecondaryLang}" Margin="0,0,0,2" />
-        <TextBox x:Name="SecondaryBox" Margin="0,0,0,12" />
+        <!-- Dark, visible text input (own template so the app-wide theme can't hide it) -->
+        <Style x:Key="Field" TargetType="TextBox">
+            <Setter Property="Foreground" Value="#FFF2F2F4" />
+            <Setter Property="CaretBrush" Value="#FFF2F2F4" />
+            <Setter Property="Background" Value="#FF2A2A30" />
+            <Setter Property="BorderBrush" Value="#FF3C3C44" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Padding" Value="8,6" />
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TextBox">
+                        <Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="6">
+                            <ScrollViewer x:Name="PART_ContentHost" Margin="{TemplateBinding Padding}"
+                                          VerticalScrollBarVisibility="{TemplateBinding VerticalScrollBarVisibility}" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter Property="BorderBrush" Value="#FF2D7DF6" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
 
-        <TextBlock Text="{x:Static res:UiStrings.SettingsModel}" Margin="0,0,0,2" />
-        <TextBox x:Name="ModelBox" Margin="0,0,0,12" />
+        <Style x:Key="Secret" TargetType="PasswordBox">
+            <Setter Property="Foreground" Value="#FFF2F2F4" />
+            <Setter Property="CaretBrush" Value="#FFF2F2F4" />
+            <Setter Property="Background" Value="#FF2A2A30" />
+            <Setter Property="BorderBrush" Value="#FF3C3C44" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Padding" Value="8,6" />
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="PasswordBox">
+                        <Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="6">
+                            <ScrollViewer x:Name="PART_ContentHost" Margin="{TemplateBinding Padding}" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter Property="BorderBrush" Value="#FF2D7DF6" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
 
-        <TextBlock Text="{x:Static res:UiStrings.SettingsHotkey}" Margin="0,0,0,2" />
-        <TextBox x:Name="HotkeyBox" Margin="0,0,0,2" />
-        <TextBlock x:Name="HotkeyHint" Foreground="#FFE06C75" FontSize="11" Margin="0,0,0,10" />
+        <Style x:Key="Toggle" TargetType="CheckBox">
+            <Setter Property="Foreground" Value="#FFE6E6EA" />
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="Margin" Value="0,0,0,10" />
+        </Style>
 
-        <CheckBox x:Name="AutoDirectionBox" Content="{x:Static res:UiStrings.SettingsAutoDirection}" Margin="0,0,0,8" />
-        <CheckBox x:Name="AutoAppearBadgeBox" Content="{x:Static res:UiStrings.SettingsAutoAppearBadge}" Margin="0,0,0,8" />
-        <CheckBox x:Name="RunAtStartupBox" Content="{x:Static res:UiStrings.SettingsRunAtStartup}" Margin="0,0,0,14" />
+        <Style x:Key="Primary" TargetType="Button">
+            <Setter Property="Foreground" Value="White" />
+            <Setter Property="Background" Value="#FF2D7DF6" />
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Padding" Value="22,8" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="bg" Background="{TemplateBinding Background}" CornerRadius="6"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="bg" Property="Background" Value="#FF3A8AFF" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="bg" Property="Background" Value="#FF3A3A42" />
+                                <Setter Property="Foreground" Value="#FF8A8A93" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
 
-        <TextBlock Text="{x:Static res:UiStrings.SettingsAllowlist}" Margin="0,0,0,2" />
-        <TextBox x:Name="AllowlistBox" AcceptsReturn="True" TextWrapping="NoWrap" Height="56"
-                 VerticalScrollBarVisibility="Auto" Margin="0,0,0,12" />
+    <DockPanel LastChildFill="True">
+        <!-- Always-visible footer with Save + status -->
+        <Border DockPanel.Dock="Bottom" Background="#FF161619" BorderBrush="#FF2A2A30" BorderThickness="0,1,0,0" Padding="20,12">
+            <DockPanel LastChildFill="True">
+                <Button x:Name="SaveButton" DockPanel.Dock="Right" Style="{StaticResource Primary}"
+                        Content="{x:Static res:UiStrings.SettingsSave}" Click="OnSaveClick" />
+                <TextBlock x:Name="StatusText" VerticalAlignment="Center" FontSize="12" Foreground="#FF8A8A93"
+                           TextWrapping="Wrap" Margin="0,0,12,0" />
+            </DockPanel>
+        </Border>
 
-        <TextBlock Text="{x:Static res:UiStrings.SettingsBlocklist}" Margin="0,0,0,2" />
-        <TextBox x:Name="BlocklistBox" AcceptsReturn="True" TextWrapping="NoWrap" Height="56"
-                 VerticalScrollBarVisibility="Auto" Margin="0,0,0,14" />
+        <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="20,18">
+            <StackPanel>
+                <TextBlock Text="AI Translator" Foreground="White" FontSize="20" FontWeight="SemiBold" />
+                <TextBlock Text="Settings" Foreground="#FF8A8A93" FontSize="12" Margin="0,0,0,18" />
 
-        <Button x:Name="SaveButton" Content="{x:Static res:UiStrings.SettingsSave}" Click="OnSaveClick" HorizontalAlignment="Right" Padding="16,4" />
-        <TextBlock x:Name="StatusText" Foreground="#FFAAAAAA" Margin="0,10,0,0" />
-    </StackPanel>
+                <TextBlock Style="{StaticResource Label}" Text="{x:Static res:UiStrings.SettingsApiKey}" />
+                <PasswordBox x:Name="ApiKeyBox" Style="{StaticResource Secret}" />
+                <TextBlock Style="{StaticResource Hint}" Text="Stored securely in Windows Credential Manager — not in any file." Margin="0,3,0,16" />
+
+                <Grid Margin="0,0,0,16">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="14" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Grid.Column="0">
+                        <TextBlock Style="{StaticResource Label}" Text="{x:Static res:UiStrings.SettingsPrimaryLang}" />
+                        <TextBox x:Name="PrimaryBox" Style="{StaticResource Field}" />
+                    </StackPanel>
+                    <StackPanel Grid.Column="2">
+                        <TextBlock Style="{StaticResource Label}" Text="{x:Static res:UiStrings.SettingsSecondaryLang}" />
+                        <TextBox x:Name="SecondaryBox" Style="{StaticResource Field}" />
+                    </StackPanel>
+                </Grid>
+
+                <TextBlock Style="{StaticResource Label}" Text="{x:Static res:UiStrings.SettingsModel}" />
+                <TextBox x:Name="ModelBox" Style="{StaticResource Field}" Margin="0,0,0,16" />
+
+                <TextBlock Style="{StaticResource Label}" Text="{x:Static res:UiStrings.SettingsHotkey}" />
+                <TextBox x:Name="HotkeyBox" Style="{StaticResource Field}" />
+                <TextBlock x:Name="HotkeyHint" Foreground="#FFE06C75" FontSize="11" Margin="0,4,0,16" />
+
+                <CheckBox x:Name="AutoDirectionBox" Style="{StaticResource Toggle}" Content="{x:Static res:UiStrings.SettingsAutoDirection}" />
+                <CheckBox x:Name="AutoAppearBadgeBox" Style="{StaticResource Toggle}" Content="{x:Static res:UiStrings.SettingsAutoAppearBadge}" />
+                <CheckBox x:Name="RunAtStartupBox" Style="{StaticResource Toggle}" Content="{x:Static res:UiStrings.SettingsRunAtStartup}" />
+
+                <TextBlock Style="{StaticResource Label}" Text="{x:Static res:UiStrings.SettingsAllowlist}" Margin="0,8,0,4" />
+                <TextBox x:Name="AllowlistBox" Style="{StaticResource Field}" AcceptsReturn="True" TextWrapping="NoWrap"
+                         Height="64" VerticalScrollBarVisibility="Auto" Margin="0,0,0,16" />
+
+                <TextBlock Style="{StaticResource Label}" Text="{x:Static res:UiStrings.SettingsBlocklist}" />
+                <TextBox x:Name="BlocklistBox" Style="{StaticResource Field}" AcceptsReturn="True" TextWrapping="NoWrap"
+                         Height="64" VerticalScrollBarVisibility="Auto" />
+            </StackPanel>
+        </ScrollViewer>
+    </DockPanel>
 </Window>
