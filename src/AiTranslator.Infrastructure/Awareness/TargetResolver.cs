@@ -1,4 +1,5 @@
 using System.Drawing;
+using System.IO;
 using System.Windows.Automation;
 using AiTranslator.Core.Abstractions;
 
@@ -27,6 +28,7 @@ public sealed class TargetResolver : ITargetResolver
             var focused = AutomationElement.FocusedElement;
             if (focused is null)
             {
+                Log("focusedElement: <null>");
                 return null;
             }
 
@@ -37,7 +39,9 @@ public sealed class TargetResolver : ITargetResolver
                 return null;
             }
 
-            return new FieldLocation(IsEditable(focused), ReadRect(focused));
+            var location = new FieldLocation(IsEditable(focused), ReadRect(focused));
+            Log($"focusedElement: ControlType={Safe(() => focused.Current.ControlType.ProgrammaticName)} Class='{Safe(() => focused.Current.ClassName)}' Name='{Safe(() => focused.Current.Name)}' HasFocus={Safe(() => focused.Current.HasKeyboardFocus.ToString())} → editable={location.IsEditable} rect={location.Rect?.ToString() ?? "null"}");
+            return location;
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
@@ -87,5 +91,30 @@ public sealed class TargetResolver : ITargetResolver
         }
 
         return new Rectangle((int)r.X, (int)r.Y, (int)r.Width, (int)r.Height);
+    }
+
+    // --- diagnostics (same file as the focus watcher; on by default, AITR_FOCUS_LOG=0 disables) ---
+    private static readonly string? LogPath =
+        string.Equals(Environment.GetEnvironmentVariable("AITR_FOCUS_LOG"), "0", StringComparison.Ordinal)
+            ? null
+            : (Environment.GetEnvironmentVariable("AITR_FOCUS_LOG") is { Length: > 0 } p && p != "1"
+                ? p
+                : Path.Combine(Path.GetTempPath(), "ai-translator-focus.log"));
+
+    private static void Log(string message)
+    {
+        if (LogPath is null)
+        {
+            return;
+        }
+
+        try { File.AppendAllText(LogPath, $"{DateTime.Now:HH:mm:ss.fff}   {message}{Environment.NewLine}"); }
+        catch { /* diagnostics must never throw */ }
+    }
+
+    private static string Safe(Func<string> f)
+    {
+        try { return f() ?? string.Empty; }
+        catch { return "<err>"; }
     }
 }
