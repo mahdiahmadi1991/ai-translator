@@ -108,16 +108,28 @@ public partial class App : Application
 
     private void ShowOverlay(FocusTarget? target = null, System.Drawing.Rectangle? anchor = null)
     {
-        // Recreate per invocation so the latest settings apply and the target is freshly captured.
-        CloseOverlay();
+        // Reuse a single box so an in-progress draft survives hide/show (it reads live settings via a
+        // provider). It hides — not closes — when focus leaves, then reappears with the same text.
+        _overlay ??= CreateOverlay();
 
+        if (target is { } resolved)
+        {
+            _overlay.ShowFor(resolved, anchor);   // badge path: type into the watcher-resolved field
+        }
+        else
+        {
+            _overlay.ShowFor();                   // hotkey path: capture the foreground window
+        }
+    }
+
+    private OverlayInputWindow CreateOverlay()
+    {
         var overlay = new OverlayInputWindow(
             _services.GetRequiredService<IFocusTargetProvider>(),
             _services.GetRequiredService<ITranslationService>(),
             _services.GetRequiredService<ITextInjector>(),
             _services.GetRequiredService<ITargetResolver>(),
-            _settings);
-        _overlay = overlay;
+            () => _settings);
         overlay.Closed += (_, _) =>
         {
             if (ReferenceEquals(_overlay, overlay))
@@ -125,15 +137,7 @@ public partial class App : Application
                 _overlay = null;
             }
         };
-
-        if (target is { } resolved)
-        {
-            overlay.ShowFor(resolved, anchor);   // badge path: type into the watcher-resolved field
-        }
-        else
-        {
-            overlay.ShowFor();                   // hotkey path: capture the foreground window
-        }
+        return overlay;
     }
 
     private void CloseOverlay()
@@ -248,6 +252,7 @@ public partial class App : Application
 
     protected override void OnExit(ExitEventArgs e)
     {
+        CloseOverlay();
         StopAwareness();
         _hotkey?.Dispose();
         _msgSource?.Dispose();

@@ -29,12 +29,17 @@ public partial class BadgeWindow : NonActivatingWindow
             Show();
         }
 
-        // Pick the field corner to anchor from (AppOffset.Corner), then nudge by dx/dy — which are DIPs,
-        // so scale them to the field monitor's physical pixels. Exact corner semantics are tuned by
-        // per-app calibration (Task 6); multi-monitor placement is confirmed in the manual pass.
+        UpdateLayout();   // so ActualWidth/Height are valid for the inside-the-edge math
+
+        // Grammarly-style: nestle the badge just INSIDE the field's right edge, vertically centred —
+        // not hanging off a corner. dx/dy (DIPs) are optional per-app nudges from that anchor.
         double scale = ScreenPlacement.ScaleForPoint(fieldRect.Left, fieldRect.Top);
-        int x = (offset.Corner is 1 or 2 ? fieldRect.Right : fieldRect.Left) + (int)Math.Round(offset.Dx * scale);
-        int y = (offset.Corner is 1 or 3 ? fieldRect.Bottom : fieldRect.Top) + (int)Math.Round(offset.Dy * scale);
+        int badgeW = (int)Math.Round((ActualWidth > 0 ? ActualWidth : 26) * scale);
+        int badgeH = (int)Math.Round((ActualHeight > 0 ? ActualHeight : 26) * scale);
+        int margin = (int)Math.Round(6 * scale);
+
+        int x = fieldRect.Right - badgeW - margin + (int)Math.Round(offset.Dx * scale);
+        int y = fieldRect.Top + ((fieldRect.Height - badgeH) / 2) + (int)Math.Round(offset.Dy * scale);
 
         ScreenPlacement.MoveTopLeft(new WindowInteropHelper(this).Handle, x, y, topmost: true, activate: false);
     }

@@ -58,6 +58,6 @@ public class AppOffsetsTests
     }
 
     [Fact]
-    public void Default_offset_is_bottom_right_with_inset()
-        => Assert.Equal(new AppOffset(Corner: 1, Dx: 64, Dy: -6), AppOffset.Default);
+    public void Default_offset_has_zero_nudge()
+        => Assert.Equal(new AppOffset(Corner: 1, Dx: 0, Dy: 0), AppOffset.Default);
 }

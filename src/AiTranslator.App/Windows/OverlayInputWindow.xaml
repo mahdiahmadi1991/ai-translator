@@ -8,16 +8,52 @@
         ResizeMode="NoResize"
         ShowInTaskbar="False"
         Topmost="True"
-        Width="440"
+        Width="460"
         SizeToContent="Height">
+    <Window.Resources>
+        <Style x:Key="Primary" TargetType="Button">
+            <Setter Property="Foreground" Value="White" />
+            <Setter Property="Background" Value="#FF2D7DF6" />
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Padding" Value="16,6" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="bg" Background="{TemplateBinding Background}" CornerRadius="6"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="bg" Property="Background" Value="#FF3A8AFF" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="bg" Property="Background" Value="#FF3A3A42" />
+                                <Setter Property="Foreground" Value="#FF8A8A93" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
+
     <Border CornerRadius="10" Background="#FF1E1E1E" BorderBrush="#FF3A3A3A" BorderThickness="1" Padding="12">
         <DockPanel>
             <TextBlock DockPanel.Dock="Top"
                        Text="{x:Static res:UiStrings.OverlayHint}"
-                       Foreground="#FF888888" FontSize="11" Margin="2,0,2,6" />
-            <TextBlock x:Name="Status" DockPanel.Dock="Bottom"
-                       Foreground="#FFE06C75" FontSize="11" Margin="2,6,2,0"
-                       TextWrapping="Wrap" Visibility="Collapsed" />
+                       Foreground="#FF888888" FontSize="11" Margin="2,0,2,8" />
+
+            <Grid DockPanel.Dock="Bottom" Margin="0,10,0,0">
+                <TextBlock x:Name="Status" HorizontalAlignment="Left" VerticalAlignment="Center"
+                           Foreground="#FFE06C75" FontSize="11" TextWrapping="Wrap"
+                           Visibility="Collapsed" MaxWidth="300" />
+                <Button x:Name="TranslateButton" HorizontalAlignment="Right" Style="{StaticResource Primary}"
+                        Content="{x:Static res:UiStrings.OverlayTranslate}" Click="OnTranslateClick" />
+            </Grid>
+
             <TextBox x:Name="Input"
                      AcceptsReturn="True"
                      TextWrapping="Wrap"
