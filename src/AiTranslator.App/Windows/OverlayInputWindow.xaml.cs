@@ -28,6 +28,7 @@ public partial class OverlayInputWindow : Window
     private readonly AppSettings _settings;
     private readonly DispatcherTimer _debounce;
 
+    private readonly DispatcherTimer _closeWatch;
     private FocusTarget _target;
     private CancellationTokenSource? _inflight;
 
@@ -57,6 +58,29 @@ public partial class OverlayInputWindow : Window
             }
             // Enter is intentionally NOT handled: AcceptsReturn makes it insert a newline.
         };
+
+        // Auto-dismiss: when the box loses activation, wait briefly (injection can momentarily
+        // foreground the target) then close ONLY if focus truly went elsewhere — i.e. the foreground
+        // is neither this box nor the target field. Re-activation cancels the pending close.
+        _closeWatch = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(200) };
+        _closeWatch.Tick += OnCloseWatchTick;
+        Deactivated += (_, _) =>
+        {
+            _closeWatch.Stop();
+            _closeWatch.Start();
+        };
+        Activated += (_, _) => _closeWatch.Stop();
+    }
+
+    private void OnCloseWatchTick(object? sender, EventArgs e)
+    {
+        _closeWatch.Stop();
+        nint foreground = ScreenPlacement.ForegroundWindow();
+        nint self = new WindowInteropHelper(this).Handle;
+        if (foreground != self && foreground != _target.WindowHandle)
+        {
+            Close();   // focus left the field and the box → dismiss (the user's text is gone by design)
+        }
     }
 
     /// <summary>Hotkey path (M1): capture the foreground window as the target and show bottom-centre.</summary>
@@ -186,6 +210,7 @@ public partial class OverlayInputWindow : Window
 
     protected override void OnClosed(EventArgs e)
     {
+        _closeWatch.Stop();
         _debounce.Stop();
         _inflight?.Cancel();
         _inflight?.Dispose();

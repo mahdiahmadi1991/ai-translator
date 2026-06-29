@@ -31,7 +31,6 @@ public partial class App : Application
     private IFocusWatcher? _focusWatcher;
     private BadgeWindow? _badge;
     private FocusedField? _activeField;
-    private nint _overlayTargetHwnd;
     private AppSettings _settings = AppSettings.Default;
 
     protected override void OnStartup(StartupEventArgs e)
@@ -111,7 +110,6 @@ public partial class App : Application
     {
         // Recreate per invocation so the latest settings apply and the target is freshly captured.
         CloseOverlay();
-        _overlayTargetHwnd = target?.WindowHandle ?? 0;
 
         var overlay = new OverlayInputWindow(
             _services.GetRequiredService<IFocusTargetProvider>(),
@@ -125,7 +123,6 @@ public partial class App : Application
             if (ReferenceEquals(_overlay, overlay))
             {
                 _overlay = null;
-                _overlayTargetHwnd = 0;
             }
         };
 
@@ -143,7 +140,6 @@ public partial class App : Application
     {
         _overlay?.Close();
         _overlay = null;
-        _overlayTargetHwnd = 0;
     }
 
     // ---- M2 awareness: badge auto-appearance --------------------------------------------------
@@ -197,21 +193,12 @@ public partial class App : Application
     // for ~2s against StopAwareness()'s Join during app exit / settings toggle).
     private void OnFieldFocused(object? sender, FocusedField field) => Dispatcher.InvokeAsync(() => ShowBadge(field));
 
-    // Focus left every watched field (and it is not our overlay) → dismiss the badge AND the box.
-    private void OnFieldUnfocused(object? sender, EventArgs e) => Dispatcher.InvokeAsync(() =>
-    {
-        HideBadge();
-        CloseOverlay();
-    });
+    // Focus left every watched field → hide the badge. (The overlay dismisses itself when focus
+    // truly leaves it — see OverlayInputWindow — so injection's focus churn never closes it.)
+    private void OnFieldUnfocused(object? sender, EventArgs e) => Dispatcher.InvokeAsync(HideBadge);
 
     private void ShowBadge(FocusedField field)
     {
-        // A different field gained focus while a box was open for the previous one → dismiss the box.
-        if (_overlay is not null && _overlayTargetHwnd != field.WindowHandle)
-        {
-            CloseOverlay();
-        }
-
         _activeField = field;
         if (field.FieldRect is { } rect)
         {

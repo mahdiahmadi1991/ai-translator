@@ -19,6 +19,7 @@ namespace AiTranslator.Infrastructure.Awareness;
 public sealed class TargetResolver : ITargetResolver
 {
     private readonly object _gate = new();
+    private readonly int _ownProcessId = Environment.ProcessId;
     private nint _cachedHandle;
     private AutomationElement? _cachedElement;   // last editable field resolved for _cachedHandle
 
@@ -28,6 +29,13 @@ public sealed class TargetResolver : ITargetResolver
         {
             var focused = AutomationElement.FocusedElement;
             if (focused is null)
+            {
+                return null;
+            }
+
+            // Never treat our own floating box as a target (it has focus while the user types) — that
+            // would mis-anchor the badge and, worse, pollute the cache so TrySetText writes into us.
+            if (focused.Current.ProcessId == _ownProcessId)
             {
                 return null;
             }
