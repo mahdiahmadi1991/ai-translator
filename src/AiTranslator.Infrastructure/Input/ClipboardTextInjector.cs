@@ -38,7 +38,8 @@ public sealed class ClipboardTextInjector : ITextInjector
         }
     }
 
-    private static void FocusTargetWindow(HWND target)
+    // unsafe: GetWindowThreadProcessId's lpdwProcessId parameter is a uint* (passed null via default).
+    private static unsafe void FocusTargetWindow(HWND target)
     {
         HWND fg = PInvoke.GetForegroundWindow();
         uint fgThread = PInvoke.GetWindowThreadProcessId(fg, default);

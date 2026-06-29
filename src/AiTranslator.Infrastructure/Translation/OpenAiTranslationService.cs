@@ -1,3 +1,7 @@
+// OPENAI001: the OpenAI Responses API (ResponsesClient, CreateResponseOptions, ResponseItem,
+// StreamingResponseOutputTextDeltaUpdate) is shipped as an [Experimental] preview. ADR-0002 chose it
+// deliberately; the suppression is scoped to this one file so the experimental surface stays isolated.
+#pragma warning disable OPENAI001
 using System.Runtime.CompilerServices;
 using AiTranslator.Core.Abstractions;
 using AiTranslator.Core.Models;
