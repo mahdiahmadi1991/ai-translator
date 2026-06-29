@@ -3,6 +3,7 @@ using System.Windows;
 using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Threading;
+using AiTranslator.App.Resources;
 using AiTranslator.Core.Abstractions;
 using AiTranslator.Core.Models;
 using AiTranslator.Core.Translation;
@@ -92,9 +93,12 @@ public partial class OverlayInputWindow : Window
     private void PositionNear(System.Drawing.Rectangle anchorPx)
     {
         double scale = ScreenPlacement.ScaleForPoint(anchorPx.Left, anchorPx.Bottom);
-        int gap = (int)Math.Round(4 * scale);
-        ScreenPlacement.MoveTopLeft(
-            new WindowInteropHelper(this).Handle, anchorPx.Left, anchorPx.Bottom + gap, topmost: false, activate: true);
+        int winW = (int)Math.Round(ActualWidth * scale);
+        int winH = (int)Math.Round(ActualHeight * scale);
+        int gap = (int)Math.Round(6 * scale);
+
+        var (x, y) = ScreenPlacement.PlaceNearField(anchorPx, winW, winH, gap);
+        ScreenPlacement.MoveTopLeft(new WindowInteropHelper(this).Handle, x, y, topmost: false, activate: true);
     }
 
     private async void OnDebounceTick(object? sender, EventArgs e)
@@ -127,6 +131,8 @@ public partial class OverlayInputWindow : Window
 
             await _injector.ReplaceTextAsync(_target, sb.ToString(), ct);
 
+            ClearStatus();
+
             // Return focus so the user can keep typing (see remarks — flicker is an M1 limitation).
             Activate();
             Input.Focus();
@@ -135,6 +141,28 @@ public partial class OverlayInputWindow : Window
         {
             // Superseded by newer input — ignore.
         }
+        catch (InvalidOperationException)
+        {
+            // Most commonly: no API key configured. Surface a hint instead of crashing.
+            ShowStatus(UiStrings.OverlayNoApiKey);
+        }
+        catch (Exception ex)
+        {
+            // Network / auth / SDK error — never let an async-void handler crash the app.
+            ShowStatus($"{UiStrings.OverlayError} {ex.Message}");
+        }
+    }
+
+    private void ShowStatus(string message)
+    {
+        Status.Text = message;
+        Status.Visibility = System.Windows.Visibility.Visible;
+    }
+
+    private void ClearStatus()
+    {
+        Status.Text = string.Empty;
+        Status.Visibility = System.Windows.Visibility.Collapsed;
     }
 
     protected override void OnClosed(EventArgs e)
