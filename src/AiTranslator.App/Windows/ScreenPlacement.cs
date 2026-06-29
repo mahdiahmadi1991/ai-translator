@@ -113,6 +113,12 @@ internal static partial class ScreenPlacement
     private static partial bool SetWindowPos(
         nint hWnd, nint hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
 
+    /// <summary>The current foreground window handle (0 if none).</summary>
+    public static nint ForegroundWindow() => GetForegroundWindow();
+
+    [LibraryImport("user32.dll")]
+    private static partial nint GetForegroundWindow();
+
     [LibraryImport("user32.dll")]
     private static partial nint MonitorFromPoint(POINT pt, uint dwFlags);
 
