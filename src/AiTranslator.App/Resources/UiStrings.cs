@@ -15,6 +15,8 @@ public static class UiStrings
 
     // Overlay
     public const string OverlayHint = "Type here — translation replaces the focused field";
+    public const string OverlayNoApiKey = "Set your OpenAI key in Settings first (tray → Settings).";
+    public const string OverlayError = "Translation failed:";
 
     // Badge
     public const string BadgeTooltip = "Translate — click to type a translation into this field";

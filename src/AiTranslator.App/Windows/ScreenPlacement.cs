@@ -1,3 +1,4 @@
+using System.Drawing;
 using System.Runtime.InteropServices;
 
 namespace AiTranslator.App.Windows;
@@ -47,11 +48,64 @@ internal static partial class ScreenPlacement
         return 1.0;
     }
 
+    /// <summary>
+    /// A physical-pixel top-left for a <paramref name="winWpx"/>×<paramref name="winHpx"/> window placed
+    /// just below <paramref name="fieldPx"/>, flipped above the field if it would overflow the bottom,
+    /// and clamped to the field monitor's work area so it is never off-screen.
+    /// </summary>
+    public static (int X, int Y) PlaceNearField(Rectangle fieldPx, int winWpx, int winHpx, int gapPx)
+    {
+        var work = WorkAreaForPoint(fieldPx.Left, fieldPx.Bottom);
+
+        int x = Clamp(fieldPx.Left, work.Left, Math.Max(work.Left, work.Right - winWpx));
+        int y = fieldPx.Bottom + gapPx;
+        if (y + winHpx > work.Bottom)
+        {
+            y = fieldPx.Top - gapPx - winHpx;   // not enough room below — place above the field
+        }
+
+        y = Clamp(y, work.Top, Math.Max(work.Top, work.Bottom - winHpx));
+        return (x, y);
+    }
+
+    private static int Clamp(int v, int lo, int hi) => v < lo ? lo : (v > hi ? hi : v);
+
+    private static Rectangle WorkAreaForPoint(int xPx, int yPx)
+    {
+        nint monitor = MonitorFromPoint(new POINT { X = xPx, Y = yPx }, MONITOR_DEFAULTTONEAREST);
+        var mi = new MONITORINFO { cbSize = (uint)Marshal.SizeOf<MONITORINFO>() };
+        if (monitor != 0 && GetMonitorInfo(monitor, ref mi))
+        {
+            return Rectangle.FromLTRB(mi.rcWork.left, mi.rcWork.top, mi.rcWork.right, mi.rcWork.bottom);
+        }
+
+        // Fallback: a generous virtual-desktop-ish box so clamping never hides the window.
+        return Rectangle.FromLTRB(0, 0, 10000, 10000);
+    }
+
     [StructLayout(LayoutKind.Sequential)]
     private struct POINT
     {
         public int X;
         public int Y;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct RECT
+    {
+        public int left;
+        public int top;
+        public int right;
+        public int bottom;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct MONITORINFO
+    {
+        public uint cbSize;
+        public RECT rcMonitor;
+        public RECT rcWork;
+        public uint dwFlags;
     }
 
     [LibraryImport("user32.dll", SetLastError = true)]
@@ -61,6 +115,10 @@ internal static partial class ScreenPlacement
 
     [LibraryImport("user32.dll")]
     private static partial nint MonitorFromPoint(POINT pt, uint dwFlags);
+
+    [LibraryImport("user32.dll", EntryPoint = "GetMonitorInfoW")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static partial bool GetMonitorInfo(nint hMonitor, ref MONITORINFO lpmi);
 
     [LibraryImport("shcore.dll")]
     private static partial int GetDpiForMonitor(nint hmonitor, int dpiType, out uint dpiX, out uint dpiY);
