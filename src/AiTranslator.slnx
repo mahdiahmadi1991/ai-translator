@@ -1,0 +1,6 @@
+<Solution>
+  <Project Path="AiTranslator.App/AiTranslator.App.csproj" />
+  <Project Path="AiTranslator.Core/AiTranslator.Core.csproj" />
+  <Project Path="AiTranslator.Infrastructure/AiTranslator.Infrastructure.csproj" />
+  <Project Path="AiTranslator.Tests/AiTranslator.Tests.csproj" />
+</Solution>

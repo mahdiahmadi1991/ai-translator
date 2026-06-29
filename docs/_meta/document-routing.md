@@ -17,6 +17,7 @@ project-specific routing.
 | OpenAI model/pricing/API specifics | `reference/openai-models.md` | Verify against live docs before relying on it |
 | The planned/actual source tree | `reference/source-layout.md` | Update when the solution structure changes |
 | A how-to / setup / build / run procedure | `guides/` | Task-oriented, step-by-step |
+| An implementation plan (per milestone) | `plans/YYYY-MM-DD-<feature>.md` | Bite-sized TDD tasks; one per milestone |
 | A project-specific rule or standard override | `governance/` | Otherwise the global standards apply as-is |
 | An image/PDF referenced by a doc | `_attachments/` | Reference it; don't inline binaries elsewhere |
 | A reusable doc skeleton | `templates/` | e.g. the ADR template |

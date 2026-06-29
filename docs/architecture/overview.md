@@ -157,9 +157,13 @@ See [ADR-0002](decision-records/0002-translation-openai-responses-streaming.md) 
 ## 9. Roadmap
 
 1. **M0 — Workspace & design** (done): repo, standards-compliant docs, ADRs, this spec.
-2. **M1 — Walking skeleton:** tray app + settings + Credential Manager key + manual-hotkey overlay +
-   OpenAI streaming translation + clipboard injection into the *currently focused* field (no badge
-   yet). Proves the end-to-end path on Win32 targets.
+2. **M1 — Walking skeleton** (in progress): tray app + settings + Credential Manager key +
+   manual-hotkey overlay + OpenAI streaming translation + clipboard injection into the *currently
+   focused* field (no badge yet). Proves the end-to-end path on Win32 targets.
+   *Status:* code written for all layers; cross-platform **Core + Tests built and green** on Linux;
+   **Infrastructure + App await their first Windows build** —
+   [windows-build-checklist.md](../guides/windows-build-checklist.md). Plan:
+   [plans/2026-06-28-m1-walking-skeleton.md](../plans/2026-06-28-m1-walking-skeleton.md).
 3. **M2 — Grammarly-style awareness:** `FocusWatcher` + `TargetResolver` + `BadgeWindow` with UIA;
    allowlist; per-app offset calibration.
 4. **M3 — Chromium/WebView2 + Qt coverage:** IAccessible2 enable path for WhatsApp(WebView2)/Electron;
