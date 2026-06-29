@@ -78,19 +78,34 @@ public sealed class TargetResolver : ITargetResolver
 
         try
         {
-            if (element.TryGetCurrentPattern(ValuePattern.Pattern, out var pattern)
-                && !((ValuePattern)pattern).Current.IsReadOnly)
+            if (!element.TryGetCurrentPattern(ValuePattern.Pattern, out var pattern))
             {
-                ((ValuePattern)pattern).SetValue(text);   // direct, focus-preserving
-                return true;
+                return false;
             }
 
-            return false;   // no writable ValuePattern (e.g. some contenteditable) → caller pastes
+            var value = (ValuePattern)pattern;
+            if (value.Current.IsReadOnly)
+            {
+                return false;
+            }
+
+            value.SetValue(text);   // direct, focus-preserving
+
+            // A Chromium contenteditable (WhatsApp, Monaco, …) accepts SetValue WITHOUT error but
+            // ignores it. Verify the value actually took; if not, report failure so the caller falls
+            // back to clipboard paste (which a real Ctrl+V does apply to those fields).
+            return ReadValue(value) == text;
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
             return false;   // provider rejected SetValue → fall back to clipboard paste
         }
+    }
+
+    private static string ReadValue(ValuePattern value)
+    {
+        try { return value.Current.Value ?? string.Empty; }
+        catch { return string.Empty; }
     }
 
     /// <summary>An editable text target: an enabled, keyboard-focusable, non-password Edit/Document
