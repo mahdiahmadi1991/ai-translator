@@ -19,7 +19,7 @@ public sealed class ClipboardTextInjector : ITextInjector
     private const int ClipboardRetryCount = 8;
     private const int ClipboardRetryDelayMs = 30;
 
-    public async Task ReplaceTextAsync(FocusTarget target, string text, CancellationToken ct)
+    public async Task AppendTextAsync(FocusTarget target, string text, CancellationToken ct)
     {
         string? previous = SafeGetClipboardText();
 
@@ -28,8 +28,8 @@ public sealed class ClipboardTextInjector : ITextInjector
         FocusTargetWindow((HWND)target.WindowHandle);
         await Task.Delay(SettleAfterActivationMs, ct);
 
-        SendCtrl(VIRTUAL_KEY.VK_A);   // select all
-        SendCtrl(VIRTUAL_KEY.VK_V);   // paste (replace)
+        SendCtrl(VIRTUAL_KEY.VK_END);   // caret to end — append, do NOT select-all/replace
+        SendCtrl(VIRTUAL_KEY.VK_V);     // paste
 
         await Task.Delay(ClipboardReadGraceMs, ct);
         if (previous is not null)
