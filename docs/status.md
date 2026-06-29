@@ -14,12 +14,13 @@ canonical docs — it does not repeat them.
 
 | Layer | State | Evidence |
 | --- | --- | --- |
-| `AiTranslator.Core` + `AiTranslator.Tests` (`net10.0`) | **Built, 31/31 tests green** | `dotnet test` |
-| `AiTranslator.Infrastructure` + `AiTranslator.App` (`net10.0-windows`) | **Built green on Windows (0 warn / 0 err); app launches** | `dotnet build AiTranslator.slnx` + smoke run (lands in tray, opens Settings on first run) |
+| `AiTranslator.Core` + `AiTranslator.Tests` (`net10.0`) | **Built, 40/40 tests green** | `dotnet test` |
+| `AiTranslator.Infrastructure` + `AiTranslator.App` (`net10.0-windows`) | **Built green on Windows (0/0); app launches; M1 + M2 awareness machinery** | `dotnet build AiTranslator.slnx` + smoke run (tray + Settings; focus watcher runs live) |
 | Docs, ADRs, M1 & M2 plans | Current | this dashboard |
 
-- **Milestone:** M1 (walking skeleton) code is complete; the **M2 foundation** (pure Core logic:
-  `AppActivationPolicy`, `HotkeyCombination`) is done and tested. Roadmap:
+- **Milestone:** M1 (walking skeleton) builds green on Windows; **M2 — Grammarly awareness** machinery
+  is **built and wired** (FocusWatcher, TargetResolver via managed UIA, non-activating BadgeWindow,
+  per-app `appOffsets`, allow/blocklist + live-validated hotkey in Settings). Roadmap:
   [overview §9](architecture/overview.md#9-roadmap).
 - **Branch:** everything is merged into **`develop`**. New work goes on `feature/*` / `fix/*`
   branches off `develop`. Commit/merge is **pre-authorized for this project** (see [CLAUDE.md](../CLAUDE.md) § Git).
@@ -27,7 +28,7 @@ canonical docs — it does not repeat them.
 ## Your immediate task: run the M1 acceptance test
 
 The first Windows build is **done and green**. The Infrastructure/App C# (authored on Linux, never
-compiled) now builds with 0 warnings / 0 errors, `dotnet test` is 31/31, and the app launches into
+compiled) now builds with 0 warnings / 0 errors, `dotnet test` is green (40/40 after M2), and the app launches into
 the tray without a startup crash. Only two local fixes were needed (commit `fix(build): green first
 Windows build`): mark two interop methods `unsafe` (CS0214) and scope-suppress `OPENAI001` for the
 [Experimental] OpenAI Responses API. The other checklist items (Credential Manager, CsWin32
@@ -43,12 +44,24 @@ What remains to close M1 is the **manual acceptance test**, which needs a human 
 > Known gap: [development-setup.md](guides/development-setup.md) describes a DEBUG `.secrets/providers/openai.secrets.toml`
 > dev-key fallback, but `CredentialManagerSecretStore` does not yet read it — for now paste the key via Settings.
 
-## After M1 is green on Windows
+## M2 — Grammarly awareness: built; needs per-app verification
 
-Execute the next milestone from its plan: **M2 — Grammarly-style awareness** (badge auto-appearance):
-[plans/2026-06-29-m2-awareness.md](plans/2026-06-29-m2-awareness.md). Its pure-logic foundation is
-already done and tested; the remaining tasks are Windows-only (FocusWatcher, TargetResolver,
-BadgeWindow) and now buildable/verifiable on this machine.
+The M2 machinery is implemented and builds 0/0 ([plans/2026-06-29-m2-awareness.md](plans/2026-06-29-m2-awareness.md)):
+`FocusWatcher` (system-wide `SetWinEventHook` on an STA pump), `TargetResolver` (managed
+`System.Windows.Automation` — no NuGet, offline-friendly), the non-activating `BadgeWindow`, the App
+wiring (badge shows on focus in allowlisted apps → click opens the overlay targeting that field; the
+hotkey path is unchanged), per-app `appOffsets`, and an allow/blocklist + live-validated-hotkey
+Settings editor. Smoke-run confirms the watcher starts and runs without crashing.
+
+**What's left for M2** (needs a human on Windows, with the real apps + a key):
+
+1. Focus an allowlisted app (WhatsApp/Telegram) → confirm the badge appears beside the input field and
+   not elsewhere; click it → overlay opens targeting that field → translation replaces it.
+2. Tune per-app placement (`appOffsets`) and confirm no focus-steal / multi-monitor-DPI correctness.
+3. If WhatsApp(WebView2)/Electron don't expose a field via UIA, add the deferred IAccessible2 wake
+   (TargetResolver scope note) — only if testing shows UIA is insufficient.
+
+Deferred to **M3**: non-activating *overlay* + live-inject without focus flicker; deep Qt/Electron tuning.
 
 ## Quick reference
 

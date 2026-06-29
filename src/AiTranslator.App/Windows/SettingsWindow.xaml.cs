@@ -2,6 +2,7 @@ using System.Windows;
 using AiTranslator.App.Resources;
 using AiTranslator.App.Shell;
 using AiTranslator.Core.Abstractions;
+using AiTranslator.Core.Input;
 using AiTranslator.Core.Models;
 
 namespace AiTranslator.App.Windows;
@@ -22,7 +23,9 @@ public partial class SettingsWindow : Window
         _settingsStore = settingsStore;
         _secretStore = secretStore;
         _current = settingsStore.Load();
+        HotkeyBox.TextChanged += (_, _) => ValidateHotkey();
         LoadIntoFields();
+        ValidateHotkey();
     }
 
     private void LoadIntoFields()
@@ -33,18 +36,41 @@ public partial class SettingsWindow : Window
         ModelBox.Text = _current.Model;
         HotkeyBox.Text = _current.Hotkey;
         AutoDirectionBox.IsChecked = _current.AutoDirection;
+        AutoAppearBadgeBox.IsChecked = _current.AutoAppearBadge;
         RunAtStartupBox.IsChecked = _current.RunAtStartup;
+        AllowlistBox.Text = string.Join(Environment.NewLine, _current.Allowlist);
+        BlocklistBox.Text = string.Join(Environment.NewLine, _current.Blocklist);
     }
+
+    /// <summary>Live-validate the hotkey: clear feedback + enable Save when parseable, else block Save.</summary>
+    private void ValidateHotkey()
+    {
+        bool valid = HotkeyCombination.TryParse(HotkeyBox.Text.Trim(), out _);
+        HotkeyHint.Text = valid ? string.Empty : UiStrings.SettingsHotkeyInvalid;
+        SaveButton.IsEnabled = valid;
+    }
+
+    private static IReadOnlyList<string> ParseLines(string text)
+        => text.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
     private void OnSaveClick(object sender, RoutedEventArgs e)
     {
+        if (!HotkeyCombination.TryParse(HotkeyBox.Text.Trim(), out _))
+        {
+            ValidateHotkey();   // defensive: Save is disabled while invalid, but never persist a bad combo
+            return;
+        }
+
         var updated = _current with
         {
             LanguagePair = new LanguagePair(PrimaryBox.Text.Trim(), SecondaryBox.Text.Trim()),
             Model = ModelBox.Text.Trim(),
             Hotkey = HotkeyBox.Text.Trim(),
             AutoDirection = AutoDirectionBox.IsChecked == true,
+            AutoAppearBadge = AutoAppearBadgeBox.IsChecked == true,
             RunAtStartup = RunAtStartupBox.IsChecked == true,
+            Allowlist = ParseLines(AllowlistBox.Text),
+            Blocklist = ParseLines(BlocklistBox.Text),
         };
 
         _settingsStore.Save(updated);
