@@ -16,6 +16,9 @@ public static class UiStrings
     // Overlay
     public const string OverlayHint = "Type here — translation replaces the focused field";
 
+    // Badge
+    public const string BadgeTooltip = "Translate — click to type a translation into this field";
+
     // Settings
     public const string SettingsTitle = "AI Translator — Settings";
     public const string SettingsApiKey = "OpenAI API key";
