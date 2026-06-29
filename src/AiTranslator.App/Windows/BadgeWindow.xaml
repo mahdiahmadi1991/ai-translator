@@ -22,6 +22,14 @@
         <Border.RenderTransform>
             <ScaleTransform x:Name="HoverScale" ScaleX="1" ScaleY="1" />
         </Border.RenderTransform>
+        <Border.ContextMenu>
+            <ContextMenu>
+                <MenuItem x:Name="IgnoreItem" Click="OnIgnoreClick" />
+                <Separator />
+                <MenuItem Header="{x:Static res:UiStrings.BadgeSettings}" Click="OnSettingsMenuClick" />
+                <MenuItem Header="{x:Static res:UiStrings.BadgeQuit}" Click="OnQuitClick" />
+            </ContextMenu>
+        </Border.ContextMenu>
         <TextBlock Text="⇄" Foreground="White" FontSize="16" FontWeight="Bold"
                    HorizontalAlignment="Center" VerticalAlignment="Center" />
         <Border.Triggers>

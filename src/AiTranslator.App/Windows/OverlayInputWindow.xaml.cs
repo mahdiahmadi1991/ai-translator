@@ -91,6 +91,8 @@ public partial class OverlayInputWindow : Window
 
     private void OnSettingsClick(object sender, RoutedEventArgs e) => SettingsRequested?.Invoke(this, EventArgs.Empty);
 
+    private void OnCloseClick(object sender, RoutedEventArgs e) => Hide();   // close = hide; the draft is kept
+
     /// <summary>Hotkey path: capture the foreground window as the target and show bottom-centre.</summary>
     public void ShowFor() => ShowForCore(_focus.CaptureCurrent(), anchor: null);
 
