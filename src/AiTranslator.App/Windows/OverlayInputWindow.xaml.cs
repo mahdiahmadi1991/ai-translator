@@ -24,7 +24,6 @@ public partial class OverlayInputWindow : Window
     private readonly IFocusTargetProvider _focus;
     private readonly ITranslationService _translator;
     private readonly ITextInjector _injector;
-    private readonly ITargetResolver _resolver;
     private readonly Func<AppSettings> _settingsProvider;
     private readonly DispatcherTimer _visibilityWatch;
 
@@ -34,13 +33,12 @@ public partial class OverlayInputWindow : Window
 
     public OverlayInputWindow(
         IFocusTargetProvider focus, ITranslationService translator, ITextInjector injector,
-        ITargetResolver resolver, Func<AppSettings> settingsProvider)
+        Func<AppSettings> settingsProvider)
     {
         InitializeComponent();
         _focus = focus;
         _translator = translator;
         _injector = injector;
-        _resolver = resolver;
         _settingsProvider = settingsProvider;
 
         PreviewKeyDown += (_, e) =>
@@ -242,15 +240,11 @@ public partial class OverlayInputWindow : Window
 
             var translation = sb.ToString();
 
-            // Preferred: append via UIA — no focus move. Fallback: clipboard paste at the end.
-            if (!_resolver.TryAppendText(_target.WindowHandle, translation))
-            {
-                await _injector.AppendTextAsync(_target, translation, ct);
-            }
-
-            // Put the target's caret at the end of the inserted text, then clear the draft and dismiss
-            // (focus returns to the messenger, ready to keep typing / send).
-            _injector.PlaceCaretAtEnd(_target);
+            // Inject via clipboard paste (Ctrl+End then Ctrl+V): it goes through the app's own editor,
+            // so the text is styled correctly (UIA SetValue can land text that renders invisibly in
+            // Chromium/contenteditable fields), appends after existing content, and leaves the caret at
+            // the end. Then clear the draft and dismiss (focus returns to the app, ready to send).
+            await _injector.AppendTextAsync(_target, translation, ct);
             Input.Clear();
             ClearStatus();
             Hide();

@@ -18,10 +18,7 @@ namespace AiTranslator.Infrastructure.Awareness;
 /// </remarks>
 public sealed class TargetResolver : ITargetResolver
 {
-    private readonly object _gate = new();
     private readonly int _ownProcessId = Environment.ProcessId;
-    private nint _cachedHandle;
-    private AutomationElement? _cachedElement;   // last editable field resolved for _cachedHandle
 
     public FieldLocation? Resolve(nint windowHandle)
     {
@@ -33,26 +30,14 @@ public sealed class TargetResolver : ITargetResolver
                 return null;
             }
 
-            // Never treat our own floating box as a target (it has focus while the user types) — that
-            // would mis-anchor the badge and, worse, pollute the cache so TrySetText writes into us.
+            // Never treat our own floating box as a target (it has focus while the user types) —
+            // that would mis-anchor the badge.
             if (focused.Current.ProcessId == _ownProcessId)
             {
                 return null;
             }
 
-            bool editable = IsEditable(focused);
-            if (editable)
-            {
-                // Remember the element so TrySetText can write into it later WITHOUT moving focus
-                // away from the floating box.
-                lock (_gate)
-                {
-                    _cachedHandle = windowHandle;
-                    _cachedElement = focused;
-                }
-            }
-
-            return new FieldLocation(editable, ReadRect(focused));
+            return new FieldLocation(IsEditable(focused), ReadRect(focused));
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
@@ -61,52 +46,6 @@ public sealed class TargetResolver : ITargetResolver
             // crash — this runs on a thread whose unhandled exception would kill the process.
             return null;
         }
-    }
-
-    public bool TryAppendText(nint windowHandle, string text)
-    {
-        AutomationElement? element;
-        lock (_gate)
-        {
-            element = _cachedHandle == windowHandle ? _cachedElement : null;
-        }
-
-        if (element is null)
-        {
-            return false;
-        }
-
-        try
-        {
-            if (!element.TryGetCurrentPattern(ValuePattern.Pattern, out var pattern))
-            {
-                return false;
-            }
-
-            var value = (ValuePattern)pattern;
-            if (value.Current.IsReadOnly)
-            {
-                return false;
-            }
-
-            string combined = ReadValue(value) + text;   // append, preserving existing content
-            value.SetValue(combined);
-
-            // A Chromium contenteditable (WhatsApp, Monaco, …) accepts SetValue WITHOUT error but
-            // ignores it. Verify the value actually took; if not, report failure so the caller falls
-            // back to clipboard paste (which a real Ctrl+V does apply to those fields).
-            return ReadValue(value) == combined;
-        }
-        catch (Exception ex) when (ex is not OutOfMemoryException)
-        {
-            return false;   // provider rejected SetValue → fall back to clipboard paste
-        }
-    }
-
-    private static string ReadValue(ValuePattern value)
-    {
-        try { return value.Current.Value ?? string.Empty; }
-        catch { return string.Empty; }
     }
 
     /// <summary>An editable text target: an enabled, keyboard-focusable, non-password Edit/Document

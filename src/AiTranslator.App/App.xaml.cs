@@ -128,7 +128,6 @@ public partial class App : Application
             _services.GetRequiredService<IFocusTargetProvider>(),
             _services.GetRequiredService<ITranslationService>(),
             _services.GetRequiredService<ITextInjector>(),
-            _services.GetRequiredService<ITargetResolver>(),
             () => _settings);
         overlay.SettingsRequested += (_, _) => OpenSettings();
         overlay.Closed += (_, _) =>
