@@ -5,65 +5,29 @@ namespace AiTranslator.Tests;
 
 public class AppActivationPolicyTests
 {
-    private static readonly string[] Allow = ["WhatsApp.exe", "Telegram.exe"];
     private static readonly string[] NoBlock = [];
+    private static readonly string[] Block = ["keepass", "1password"];
 
     [Fact]
-    public void Activates_for_allowlisted_exe()
-        => Assert.True(AppActivationPolicy.ShouldActivate("WhatsApp.exe", Allow, NoBlock));
+    public void Activates_everywhere_when_blocklist_is_empty()
+        => Assert.True(AppActivationPolicy.ShouldActivate("Telegram.exe", NoBlock));
 
     [Fact]
-    public void Match_is_case_insensitive()
-        => Assert.True(AppActivationPolicy.ShouldActivate("whatsapp.EXE", Allow, NoBlock));
+    public void Activates_for_any_app_not_on_the_blocklist()
+        => Assert.True(AppActivationPolicy.ShouldActivate("Code.exe", Block));
 
     [Fact]
-    public void Matches_on_filename_when_given_a_full_path()
-        => Assert.True(AppActivationPolicy.ShouldActivate(@"C:\Program Files\WhatsApp\WhatsApp.exe", Allow, NoBlock));
+    public void Blocklisted_app_does_not_activate()
+        => Assert.False(AppActivationPolicy.ShouldActivate("KeePass.exe", Block));
 
     [Fact]
-    public void Allowlist_entry_without_extension_still_matches()
-        => Assert.True(AppActivationPolicy.ShouldActivate("WhatsApp.exe", ["whatsapp"], NoBlock));
-
-    [Fact]
-    public void Blocklist_takes_precedence_over_allowlist()
-        => Assert.False(AppActivationPolicy.ShouldActivate("WhatsApp.exe", Allow, ["whatsapp.exe"]));
-
-    [Fact]
-    public void Does_not_activate_for_unlisted_exe()
-        => Assert.False(AppActivationPolicy.ShouldActivate("notepad.exe", Allow, NoBlock));
-
-    [Fact]
-    public void Empty_allowlist_never_auto_activates()
-        => Assert.False(AppActivationPolicy.ShouldActivate("WhatsApp.exe", [], NoBlock));
+    public void Blocklist_moniker_matches_case_insensitively_on_a_full_path()
+        => Assert.False(AppActivationPolicy.ShouldActivate(@"C:\Tools\1Password\1Password.exe", ["1password"]));
 
     [Theory]
     [InlineData(null)]
     [InlineData("")]
     [InlineData("   ")]
     public void Null_or_blank_foreground_does_not_activate(string? exe)
-        => Assert.False(AppActivationPolicy.ShouldActivate(exe, Allow, NoBlock));
-
-    // --- regex "moniker" matching (Grammarly model) ---
-
-    [Fact]
-    public void Moniker_matches_packaged_whatsapp_root_exe()
-        => Assert.True(AppActivationPolicy.ShouldActivate("WhatsApp.Root.exe", ["whatsapp"], NoBlock));
-
-    [Fact]
-    public void Moniker_matches_telegram_full_path()
-        => Assert.True(AppActivationPolicy.ShouldActivate(
-            @"C:\Program Files\WindowsApps\Telegram.._x64__\Telegram.exe", ["whatsapp", "telegram"], NoBlock));
-
-    [Fact]
-    public void Moniker_does_not_match_unrelated_webview_host()
-        => Assert.False(AppActivationPolicy.ShouldActivate(
-            @"C:\...\msedgewebview2.exe", ["whatsapp", "telegram"], NoBlock));
-
-    [Fact]
-    public void Regex_moniker_alternation_matches()
-        => Assert.True(AppActivationPolicy.ShouldActivate("Telegram.exe", ["whats(app)?|tele(gram)?"], NoBlock));
-
-    [Fact]
-    public void Invalid_regex_moniker_falls_back_to_substring()
-        => Assert.True(AppActivationPolicy.ShouldActivate("notepad++.exe", ["notepad++"], NoBlock));
+        => Assert.False(AppActivationPolicy.ShouldActivate(exe, NoBlock));
 }

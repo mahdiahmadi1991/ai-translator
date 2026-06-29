@@ -157,13 +157,11 @@
                 <CheckBox x:Name="AutoAppearBadgeBox" Style="{StaticResource Toggle}" Content="{x:Static res:UiStrings.SettingsAutoAppearBadge}" />
                 <CheckBox x:Name="RunAtStartupBox" Style="{StaticResource Toggle}" Content="{x:Static res:UiStrings.SettingsRunAtStartup}" />
 
-                <TextBlock Style="{StaticResource Label}" Text="{x:Static res:UiStrings.SettingsAllowlist}" Margin="0,8,0,4" />
-                <TextBox x:Name="AllowlistBox" Style="{StaticResource Field}" AcceptsReturn="True" TextWrapping="NoWrap"
-                         Height="64" VerticalScrollBarVisibility="Auto" Margin="0,0,0,16" />
-
-                <TextBlock Style="{StaticResource Label}" Text="{x:Static res:UiStrings.SettingsBlocklist}" />
+                <TextBlock Style="{StaticResource Label}" Text="{x:Static res:UiStrings.SettingsBlocklist}" Margin="0,8,0,4" />
                 <TextBox x:Name="BlocklistBox" Style="{StaticResource Field}" AcceptsReturn="True" TextWrapping="NoWrap"
-                         Height="64" VerticalScrollBarVisibility="Auto" />
+                         Height="80" VerticalScrollBarVisibility="Auto" />
+                <TextBlock Style="{StaticResource Hint}"
+                           Text="The badge appears in every editable field — list apps here to suppress it." />
             </StackPanel>
         </ScrollViewer>
     </DockPanel>

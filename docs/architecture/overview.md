@@ -18,21 +18,21 @@ Related: [ADR index](decision-records/README.md) · [diagrams](diagrams/componen
 ## 1. Purpose & scope
 
 A Windows desktop utility that replicates **Grammarly's in-field assistant UX** for translation.
-When the user focuses an editable text field inside an allowlisted messaging app, a small **badge**
-appears beside the field. Clicking it opens a floating **input box**; the user types in their own
-language and the translation streams **into the messenger's real input box**, ready to send.
+When the user focuses an editable text field (in any app, except ones they blocklist), a small
+**badge** appears beside the field. Clicking it opens a floating **input box**; the user types in
+their own language and the translation goes **into the app's real input box**, ready to send.
 
 **In scope:** typed-text translation, multi-language with auto-direction, badge-beside-field auto
-appearance in allowlisted apps, a manual global hotkey, a settings window, secure per-user API-key
-storage.
+appearance in any editable field (opt-out via a blocklist), a manual global hotkey, a settings window,
+secure per-user API-key storage.
 
 **Out of scope (now):** voice/speech translation, mobile, translating *incoming* messages, and any
 server-side backend. These are noted in [§9 Roadmap](#9-roadmap) but not built first.
 
 ## 2. Core behavior (the user-visible contract)
 
-1. **Detect** — A system-wide focus watcher notices when an editable text field gains focus inside
-   an app on the allowlist (default: WhatsApp, Telegram). Password and read-only fields are skipped.
+1. **Detect** — A system-wide focus watcher notices when an editable text field gains focus in any
+   app, except ones the user has blocklisted. Password and read-only fields are skipped.
 2. **Badge** — A small always-on-top badge window anchors next to the field (bottom-right corner by
    default, with a per-app offset). It tracks the field as the window moves/scrolls and disappears
    when focus leaves the field. A configurable **global hotkey** is an always-available alternative

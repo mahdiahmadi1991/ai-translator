@@ -37,8 +37,7 @@ public class JsonSettingsStoreTests : IDisposable
         var custom = AppSettings.Default with
         {
             AutoAppearBadge = false,
-            Allowlist = new[] { "Foo.exe", "Bar.exe" },
-            Blocklist = new[] { "KeePass.exe" },
+            Blocklist = new[] { "KeePass.exe", "1password" },
             AppOffsets = new Dictionary<string, AppOffset>
             {
                 ["WhatsApp.exe"] = new AppOffset(Corner: 2, Dx: 12, Dy: -4),
@@ -49,8 +48,7 @@ public class JsonSettingsStoreTests : IDisposable
 
         var reloaded = new JsonSettingsStore(_path).Load();
         Assert.False(reloaded.AutoAppearBadge);
-        Assert.Equal(new[] { "Foo.exe", "Bar.exe" }, reloaded.Allowlist);
-        Assert.Equal(new[] { "KeePass.exe" }, reloaded.Blocklist);
+        Assert.Equal(new[] { "KeePass.exe", "1password" }, reloaded.Blocklist);
         Assert.Equal(2, reloaded.AppOffsets.Count);
         Assert.Equal(new AppOffset(2, 12, -4), reloaded.AppOffsets["WhatsApp.exe"]);
         Assert.Equal(new AppOffset(1, 64, -6), reloaded.AppOffsets["Telegram.exe"]);
@@ -63,7 +61,7 @@ public class JsonSettingsStoreTests : IDisposable
         var json = File.ReadAllText(_path);
 
         Assert.Contains("\"autoAppearBadge\"", json);   // docs/reference/configuration.md uses camelCase
-        Assert.Contains("\"allowlist\"", json);
+        Assert.Contains("\"blocklist\"", json);
         Assert.DoesNotContain("\"AutoAppearBadge\"", json);
     }
 

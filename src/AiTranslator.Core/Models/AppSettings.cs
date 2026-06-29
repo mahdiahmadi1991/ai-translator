@@ -17,9 +17,8 @@ public sealed record AppSettings
     public string Hotkey { get; init; } = "Ctrl+Alt+T";
     public bool AutoAppearBadge { get; init; } = true;
 
-    // Regex "monikers" matched against the foreground process name (Grammarly's model). "whatsapp"
-    // covers both WhatsApp.exe and the packaged WhatsApp.Root.exe; "telegram" covers Telegram.exe.
-    public IReadOnlyList<string> Allowlist { get; init; } = ["whatsapp", "telegram"];
+    // Opt-out model: the badge appears anywhere an editable field is focused, except apps whose exe
+    // matches a Blocklist "moniker" (regex against the process name — see ExeName). Empty = everywhere.
     public IReadOnlyList<string> Blocklist { get; init; } = [];
 
     /// <summary>Per-exe badge offset calibration (<c>appOffsets</c>); empty until the user calibrates.</summary>
