@@ -1,4 +1,5 @@
 using AiTranslator.Core.Abstractions;
+using AiTranslator.Core.Input;
 using Windows.Win32;
 using Windows.Win32.Foundation;
 using Windows.Win32.UI.Input.KeyboardAndMouse;
@@ -24,8 +25,14 @@ public sealed class HotkeyService : IHotkeyService
     public bool Register(string hotkey)
     {
         Unregister();
-        var (mods, vk) = Parse(hotkey);
-        _registered = PInvoke.RegisterHotKey(_hwnd, HotkeyId, mods | HOT_KEY_MODIFIERS.MOD_NOREPEAT, vk);
+        if (!HotkeyCombination.TryParse(hotkey, out var combo))
+        {
+            return false;   // invalid combo — caller surfaces "pick another" (no exception)
+        }
+
+        // Core MOD_* values equal Win32 HOT_KEY_MODIFIERS; cast straight through.
+        var modifiers = (HOT_KEY_MODIFIERS)combo.Modifiers | HOT_KEY_MODIFIERS.MOD_NOREPEAT;
+        _registered = PInvoke.RegisterHotKey(_hwnd, HotkeyId, modifiers, combo.VirtualKey);
         return _registered;
     }
 
@@ -48,32 +55,6 @@ public sealed class HotkeyService : IHotkeyService
         }
 
         return false;
-    }
-
-    private static (HOT_KEY_MODIFIERS Mods, uint Vk) Parse(string hotkey)
-    {
-        HOT_KEY_MODIFIERS mods = 0;
-        uint vk = 0;
-        foreach (var raw in hotkey.Split('+', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
-        {
-            switch (raw.ToUpperInvariant())
-            {
-                case "CTRL" or "CONTROL": mods |= HOT_KEY_MODIFIERS.MOD_CONTROL; break;
-                case "ALT": mods |= HOT_KEY_MODIFIERS.MOD_ALT; break;
-                case "SHIFT": mods |= HOT_KEY_MODIFIERS.MOD_SHIFT; break;
-                case "WIN": mods |= HOT_KEY_MODIFIERS.MOD_WIN; break;
-                default:
-                    // Single letters/digits map to their ASCII virtual-key code (A-Z, 0-9).
-                    if (raw.Length == 1)
-                    {
-                        vk = char.ToUpperInvariant(raw[0]);
-                    }
-
-                    break;
-            }
-        }
-
-        return (mods, vk);
     }
 
     public void Dispose() => Unregister();
