@@ -29,7 +29,7 @@ public sealed class FocusWatcher : IFocusWatcher
 {
     private const int OBJID_CURSOR = -9;                 // skip mouse-cursor object noise on FOCUS
     private const int LocationDebounceMs = 80;           // coalesce LOCATIONCHANGE bursts
-    private const int ResolveTimeoutMs = 250;            // ADR-0003: never block on UIA without a bound
+    private const int ResolveTimeoutMs = 600;            // ADR-0003: bounded UIA — room for a one-shot WebView2 a11y wake
 
     // Optional diagnostic trace: set AITR_FOCUS_LOG=1 (→ %TEMP%\ai-translator-focus.log) or to a path.
     private static readonly string? DebugLogPath = ResolveDebugLogPath();

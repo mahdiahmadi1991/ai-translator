@@ -20,6 +20,26 @@ public partial class BadgeWindow : NonActivatingWindow
         InitializeComponent();
         Root.MouseLeftButtonUp += (_, _) => Clicked?.Invoke(this, EventArgs.Empty);
         IgnoreItem.Header = UiStrings.BadgeIgnoreGeneric;
+
+        // The context menu must never outlive the badge: when focus leaves the field the badge hides,
+        // and a menu left floating over an empty spot looks broken. Closing it on every hide also
+        // covers "I clicked elsewhere" — that focus change hides the badge, which closes the menu.
+        IsVisibleChanged += (_, _) =>
+        {
+            if (!IsVisible)
+            {
+                CloseContextMenu();
+            }
+        };
+    }
+
+    /// <summary>Dismiss the right-click menu if it is open (called whenever the badge hides).</summary>
+    public void CloseContextMenu()
+    {
+        if (Root.ContextMenu is { IsOpen: true } menu)
+        {
+            menu.IsOpen = false;
+        }
     }
 
     /// <summary>Raised when the user clicks the badge.</summary>
