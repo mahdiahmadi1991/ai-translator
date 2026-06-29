@@ -24,6 +24,7 @@ public partial class OverlayInputWindow : Window
     private readonly IFocusTargetProvider _focus;
     private readonly ITranslationService _translator;
     private readonly ITextInjector _injector;
+    private readonly ITargetResolver _resolver;
     private readonly AppSettings _settings;
     private readonly DispatcherTimer _debounce;
 
@@ -31,12 +32,14 @@ public partial class OverlayInputWindow : Window
     private CancellationTokenSource? _inflight;
 
     public OverlayInputWindow(
-        IFocusTargetProvider focus, ITranslationService translator, ITextInjector injector, AppSettings settings)
+        IFocusTargetProvider focus, ITranslationService translator, ITextInjector injector,
+        ITargetResolver resolver, AppSettings settings)
     {
         InitializeComponent();
         _focus = focus;
         _translator = translator;
         _injector = injector;
+        _resolver = resolver;
         _settings = settings;
 
         _debounce = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(settings.DebounceMs) };
@@ -135,13 +138,23 @@ public partial class OverlayInputWindow : Window
                 sb.Append(chunk);
             }
 
-            await _injector.ReplaceTextAsync(_target, sb.ToString(), ct);
+            var translation = sb.ToString();
 
-            ClearStatus();
-
-            // Return focus so the user can keep typing (see remarks — flicker is an M1 limitation).
-            Activate();
-            Input.Focus();
+            // Preferred: set the field's value directly via UIA — this does NOT move focus, so the
+            // user keeps typing in this box uninterrupted while the messenger updates in the background.
+            if (_resolver.TrySetText(_target.WindowHandle, translation))
+            {
+                ClearStatus();
+            }
+            else
+            {
+                // Fallback (fields without a writable ValuePattern): clipboard paste, which must briefly
+                // foreground the target — then we return focus here.
+                await _injector.ReplaceTextAsync(_target, translation, ct);
+                ClearStatus();
+                Activate();
+                Input.Focus();
+            }
         }
         catch (OperationCanceledException)
         {

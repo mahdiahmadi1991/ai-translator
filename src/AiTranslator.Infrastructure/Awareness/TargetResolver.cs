@@ -18,6 +18,10 @@ namespace AiTranslator.Infrastructure.Awareness;
 /// </remarks>
 public sealed class TargetResolver : ITargetResolver
 {
+    private readonly object _gate = new();
+    private nint _cachedHandle;
+    private AutomationElement? _cachedElement;   // last editable field resolved for _cachedHandle
+
     public FieldLocation? Resolve(nint windowHandle)
     {
         try
@@ -28,7 +32,19 @@ public sealed class TargetResolver : ITargetResolver
                 return null;
             }
 
-            return new FieldLocation(IsEditable(focused), ReadRect(focused));
+            bool editable = IsEditable(focused);
+            if (editable)
+            {
+                // Remember the element so TrySetText can write into it later WITHOUT moving focus
+                // away from the floating box.
+                lock (_gate)
+                {
+                    _cachedHandle = windowHandle;
+                    _cachedElement = focused;
+                }
+            }
+
+            return new FieldLocation(editable, ReadRect(focused));
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
@@ -36,6 +52,36 @@ public sealed class TargetResolver : ITargetResolver
             // Win32Exception from a flaky Chromium/Electron provider, …) is "unresolved", never a
             // crash — this runs on a thread whose unhandled exception would kill the process.
             return null;
+        }
+    }
+
+    public bool TrySetText(nint windowHandle, string text)
+    {
+        AutomationElement? element;
+        lock (_gate)
+        {
+            element = _cachedHandle == windowHandle ? _cachedElement : null;
+        }
+
+        if (element is null)
+        {
+            return false;
+        }
+
+        try
+        {
+            if (element.TryGetCurrentPattern(ValuePattern.Pattern, out var pattern)
+                && !((ValuePattern)pattern).Current.IsReadOnly)
+            {
+                ((ValuePattern)pattern).SetValue(text);   // direct, focus-preserving
+                return true;
+            }
+
+            return false;   // no writable ValuePattern (e.g. some contenteditable) → caller pastes
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            return false;   // provider rejected SetValue → fall back to clipboard paste
         }
     }
 
