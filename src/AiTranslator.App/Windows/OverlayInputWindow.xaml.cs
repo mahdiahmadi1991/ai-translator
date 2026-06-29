@@ -242,11 +242,10 @@ public partial class OverlayInputWindow : Window
 
             var translation = sb.ToString();
 
-            // Preferred: set the field's value directly via UIA — no focus move. Fallback: clipboard
-            // paste (briefly foregrounds the target).
-            if (!_resolver.TrySetText(_target.WindowHandle, translation))
+            // Preferred: append via UIA — no focus move. Fallback: clipboard paste at the end.
+            if (!_resolver.TryAppendText(_target.WindowHandle, translation))
             {
-                await _injector.ReplaceTextAsync(_target, translation, ct);
+                await _injector.AppendTextAsync(_target, translation, ct);
             }
 
             // Put the target's caret at the end of the inserted text, then clear the draft and dismiss

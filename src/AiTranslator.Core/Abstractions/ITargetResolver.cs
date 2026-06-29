@@ -20,9 +20,10 @@ public interface ITargetResolver
     FieldLocation? Resolve(nint windowHandle);
 
     /// <summary>
-    /// Try to set the previously-resolved field's text directly, <b>without moving focus</b> (UIA
-    /// ValuePattern). Returns false when the field cannot be set this way (caller then falls back to
-    /// clipboard paste). This is what keeps the floating box focused while the messenger updates.
+    /// Try to <b>append</b> text to the previously-resolved field <b>without moving focus</b> (UIA
+    /// ValuePattern), preserving any existing content. Returns false when the field cannot be set this
+    /// way OR the value did not actually take (e.g. Chromium contenteditable) — the caller then falls
+    /// back to clipboard paste.
     /// </summary>
-    bool TrySetText(nint windowHandle, string text);
+    bool TryAppendText(nint windowHandle, string text);
 }

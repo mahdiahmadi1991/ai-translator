@@ -63,7 +63,7 @@ public sealed class TargetResolver : ITargetResolver
         }
     }
 
-    public bool TrySetText(nint windowHandle, string text)
+    public bool TryAppendText(nint windowHandle, string text)
     {
         AutomationElement? element;
         lock (_gate)
@@ -89,12 +89,13 @@ public sealed class TargetResolver : ITargetResolver
                 return false;
             }
 
-            value.SetValue(text);   // direct, focus-preserving
+            string combined = ReadValue(value) + text;   // append, preserving existing content
+            value.SetValue(combined);
 
             // A Chromium contenteditable (WhatsApp, Monaco, …) accepts SetValue WITHOUT error but
             // ignores it. Verify the value actually took; if not, report failure so the caller falls
             // back to clipboard paste (which a real Ctrl+V does apply to those fields).
-            return ReadValue(value) == text;
+            return ReadValue(value) == combined;
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
