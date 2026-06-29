@@ -65,9 +65,10 @@
 
     <Border CornerRadius="10" Background="#FF1E1E1E" BorderBrush="#FF3A3A3A" BorderThickness="1">
         <DockPanel>
-            <!-- Header: logo + direction (left); settings + close (right) -->
+            <!-- Header: logo + direction (left); settings + close (right). Drag it to move the box. -->
             <Border DockPanel.Dock="Top" Background="#FF242427" BorderBrush="#FF333338" BorderThickness="0,0,0,1"
-                    CornerRadius="10,10,0,0" Padding="10,7">
+                    CornerRadius="10,10,0,0" Padding="10,7"
+                    MouseLeftButtonDown="OnHeaderMouseDown" Cursor="SizeAll">
                 <DockPanel>
                     <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
                         <Button x:Name="SettingsButton" Style="{StaticResource IconButton}" Click="OnSettingsClick"

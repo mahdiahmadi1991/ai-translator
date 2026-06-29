@@ -8,7 +8,7 @@
         Background="Transparent"
         SizeToContent="WidthAndHeight">
     <!-- Margin leaves room for the drop shadow so it isn't clipped by the layered window. -->
-    <Border x:Name="Root" Width="30" Height="30" Margin="6" CornerRadius="15" Cursor="Hand"
+    <Border x:Name="Root" Width="30" Height="30" Margin="6" CornerRadius="15" Cursor="Hand" Opacity="0.5"
             ToolTip="{x:Static res:UiStrings.BadgeTooltip}" RenderTransformOrigin="0.5,0.5">
         <Border.Background>
             <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
@@ -37,9 +37,11 @@
                 <BeginStoryboard>
                     <Storyboard>
                         <DoubleAnimation Storyboard.TargetName="HoverScale" Storyboard.TargetProperty="ScaleX"
-                                         To="1.12" Duration="0:0:0.10" />
+                                         To="1.12" Duration="0:0:0.12" />
                         <DoubleAnimation Storyboard.TargetName="HoverScale" Storyboard.TargetProperty="ScaleY"
-                                         To="1.12" Duration="0:0:0.10" />
+                                         To="1.12" Duration="0:0:0.12" />
+                        <DoubleAnimation Storyboard.TargetName="Root" Storyboard.TargetProperty="Opacity"
+                                         To="1" Duration="0:0:0.12" />
                     </Storyboard>
                 </BeginStoryboard>
             </EventTrigger>
@@ -47,9 +49,11 @@
                 <BeginStoryboard>
                     <Storyboard>
                         <DoubleAnimation Storyboard.TargetName="HoverScale" Storyboard.TargetProperty="ScaleX"
-                                         To="1" Duration="0:0:0.10" />
+                                         To="1" Duration="0:0:0.12" />
                         <DoubleAnimation Storyboard.TargetName="HoverScale" Storyboard.TargetProperty="ScaleY"
-                                         To="1" Duration="0:0:0.10" />
+                                         To="1" Duration="0:0:0.12" />
+                        <DoubleAnimation Storyboard.TargetName="Root" Storyboard.TargetProperty="Opacity"
+                                         To="0.5" Duration="0:0:0.18" />
                     </Storyboard>
                 </BeginStoryboard>
             </EventTrigger>

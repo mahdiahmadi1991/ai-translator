@@ -38,6 +38,12 @@ public sealed class ClipboardTextInjector : ITextInjector
         }
     }
 
+    public void PlaceCaretAtEnd(FocusTarget target)
+    {
+        FocusTargetWindow((HWND)target.WindowHandle);
+        SendCtrl(VIRTUAL_KEY.VK_END);   // Ctrl+End → caret to the end of the text
+    }
+
     // unsafe: GetWindowThreadProcessId's lpdwProcessId parameter is a uint* (passed null via default).
     private static unsafe void FocusTargetWindow(HWND target)
     {
