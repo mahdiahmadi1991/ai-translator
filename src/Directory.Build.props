@@ -6,5 +6,10 @@
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <EnableNETAnalyzers>true</EnableNETAnalyzers>
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+    <!-- Force a single restore source for ALL projects regardless of any machine-global NuGet
+         source (e.g. "github"). Set here (Directory.Build.props is always read) so restore works
+         even when a sibling nuget.config is not discovered (e.g. VS over a \\wsl.localhost path).
+         Avoids NU1507 under central package management. -->
+    <RestoreSources>https://api.nuget.org/v3/index.json</RestoreSources>
   </PropertyGroup>
 </Project>
