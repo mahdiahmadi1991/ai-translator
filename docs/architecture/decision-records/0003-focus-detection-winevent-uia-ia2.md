@@ -62,9 +62,10 @@ confirmed the model and drove these **refinements actually implemented** (M2):
   event's window often belongs to `msedgewebview2.exe`. We resolve the app (and the injection target)
   from `GetForegroundWindow()` so it reads `WhatsApp.Root.exe`, while the field comes from UIA's
   system-wide focused element.
-- **Allowlist/blocklist entries are regex "monikers"** matched against the process file name
-  (Grammarly's `Moniker`). Defaults: `whatsapp`, `telegram` (so `WhatsApp.exe` *and* `WhatsApp.Root.exe`
-  match). See [configuration.md](../../reference/configuration.md).
+- **Opt-out activation:** the badge appears in any editable field; the only filter is a `blocklist`
+  of regex "monikers" matched against the process file name (Grammarly's `Moniker`). The earlier
+  allowlist was removed — users expect translation everywhere, not just messengers. See
+  [configuration.md](../../reference/configuration.md).
 - **Managed `System.Windows.Automation` was used** (not COM `IUIAutomation`) — it needs no NuGet
   (offline build) and, on this build, resolved both targets without an explicit IA2 wake:
   - WhatsApp field: `ControlType.Edit`, Name `Type a message to <chat>`, patterns **Value(read-only)+Text**.

@@ -207,7 +207,7 @@ public sealed class FocusWatcher : IFocusWatcher
         string? exePath = ResolveExe(pid);   // cheap kernel call — fine on the pump thread
         var settings = _settingsProvider();
         bool allow = exePath is not null
-            && AppActivationPolicy.ShouldActivate(exePath, settings.Allowlist, settings.Blocklist);
+            && AppActivationPolicy.ShouldActivate(exePath, settings.Blocklist);
         DebugLog($"focus: fg=0x{(nint)fg:X} pid={pid} exe='{exePath}' allow={allow}");
 
         if (!allow)

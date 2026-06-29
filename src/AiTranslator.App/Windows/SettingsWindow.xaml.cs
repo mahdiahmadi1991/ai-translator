@@ -56,7 +56,6 @@ public partial class SettingsWindow : Window
         AutoDirectionBox.IsChecked = _current.AutoDirection;
         AutoAppearBadgeBox.IsChecked = _current.AutoAppearBadge;
         RunAtStartupBox.IsChecked = _current.RunAtStartup;
-        AllowlistBox.Text = string.Join(Environment.NewLine, _current.Allowlist);
         BlocklistBox.Text = string.Join(Environment.NewLine, _current.Blocklist);
     }
 
@@ -87,7 +86,6 @@ public partial class SettingsWindow : Window
             AutoDirection = AutoDirectionBox.IsChecked == true,
             AutoAppearBadge = AutoAppearBadgeBox.IsChecked == true,
             RunAtStartup = RunAtStartupBox.IsChecked == true,
-            Allowlist = ParseLines(AllowlistBox.Text),
             Blocklist = ParseLines(BlocklistBox.Text),
         };
 
