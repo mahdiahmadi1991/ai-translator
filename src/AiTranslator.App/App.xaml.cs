@@ -6,7 +6,9 @@ using AiTranslator.App.Composition;
 using AiTranslator.App.Resources;
 using AiTranslator.App.Windows;
 using AiTranslator.Core.Abstractions;
+using AiTranslator.Core.Awareness;
 using AiTranslator.Core.Models;
+using AiTranslator.Infrastructure.Awareness;
 using AiTranslator.Infrastructure.Input;
 using H.NotifyIcon;
 using Microsoft.Extensions.DependencyInjection;
@@ -26,6 +28,9 @@ public partial class App : Application
     private TaskbarIcon _tray = null!;
     private OverlayInputWindow? _overlay;
     private SettingsWindow? _settingsWindow;
+    private IFocusWatcher? _focusWatcher;
+    private BadgeWindow? _badge;
+    private FocusedField? _activeField;
     private AppSettings _settings = AppSettings.Default;
 
     protected override void OnStartup(StartupEventArgs e)
@@ -41,6 +46,7 @@ public partial class App : Application
         CreateMessageWindowAndHotkey();
         RegisterHotkey();
         CreateTrayIcon();
+        SyncAwareness();   // start the Grammarly-style badge watcher if enabled (M2)
 
         if (_secretStore.GetApiKey() is null)
         {
@@ -100,7 +106,7 @@ public partial class App : Application
         _tray.ForceCreate();
     }
 
-    private void ShowOverlay()
+    private void ShowOverlay(FocusTarget? target = null, System.Drawing.Rectangle? anchor = null)
     {
         // Recreate per invocation so the latest settings apply and the target is freshly captured.
         _overlay?.Close();
@@ -109,7 +115,93 @@ public partial class App : Application
             _services.GetRequiredService<ITranslationService>(),
             _services.GetRequiredService<ITextInjector>(),
             _settings);
-        _overlay.ShowFor();
+
+        if (target is { } resolved)
+        {
+            _overlay.ShowFor(resolved, anchor);   // badge path: type into the watcher-resolved field
+        }
+        else
+        {
+            _overlay.ShowFor();                   // hotkey path: capture the foreground window
+        }
+    }
+
+    // ---- M2 awareness: badge auto-appearance --------------------------------------------------
+
+    /// <summary>Start or stop the focus watcher to match the current <c>AutoAppearBadge</c> setting.</summary>
+    private void SyncAwareness()
+    {
+        if (_settings.AutoAppearBadge)
+        {
+            StartAwareness();
+        }
+        else
+        {
+            StopAwareness();
+        }
+    }
+
+    private void StartAwareness()
+    {
+        if (_focusWatcher is not null)
+        {
+            return;   // already running
+        }
+
+        _badge = new BadgeWindow();
+        _badge.Clicked += (_, _) => OnBadgeClicked();
+
+        _focusWatcher = new FocusWatcher(() => _settings, _services.GetRequiredService<ITargetResolver>());
+        _focusWatcher.FieldFocused += OnFieldFocused;
+        _focusWatcher.FieldUnfocused += OnFieldUnfocused;
+        _focusWatcher.Start();
+    }
+
+    private void StopAwareness()
+    {
+        if (_focusWatcher is not null)
+        {
+            _focusWatcher.FieldFocused -= OnFieldFocused;
+            _focusWatcher.FieldUnfocused -= OnFieldUnfocused;
+            _focusWatcher.Dispose();
+            _focusWatcher = null;
+        }
+
+        _badge?.Close();
+        _badge = null;
+        _activeField = null;
+    }
+
+    // The watcher raises events on its own STA thread — marshal to the UI thread before touching WPF.
+    private void OnFieldFocused(object? sender, FocusedField field) => Dispatcher.Invoke(() => ShowBadge(field));
+
+    private void OnFieldUnfocused(object? sender, EventArgs e) => Dispatcher.Invoke(HideBadge);
+
+    private void ShowBadge(FocusedField field)
+    {
+        _activeField = field;
+        if (field.FieldRect is { } rect)
+        {
+            _badge?.ShowAt(rect, AppOffsets.For(field.ExeName, _settings));
+        }
+        else
+        {
+            _badge?.Hide();   // editable but no bounds — avoid a mis-placed badge; hotkey still works
+        }
+    }
+
+    private void HideBadge()
+    {
+        _badge?.Hide();
+        _activeField = null;
+    }
+
+    private void OnBadgeClicked()
+    {
+        if (_activeField is { } field)
+        {
+            ShowOverlay(new FocusTarget(field.WindowHandle), field.FieldRect);
+        }
     }
 
     private void OpenSettings()
@@ -131,10 +223,12 @@ public partial class App : Application
     {
         _settings = updated;
         RegisterHotkey();   // re-register in case the hotkey changed
+        SyncAwareness();    // start/stop the badge watcher if AutoAppearBadge changed
     }
 
     protected override void OnExit(ExitEventArgs e)
     {
+        StopAwareness();
         _hotkey?.Dispose();
         _msgSource?.Dispose();
         _tray?.Dispose();

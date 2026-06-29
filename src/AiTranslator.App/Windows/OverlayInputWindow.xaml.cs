@@ -54,13 +54,26 @@ public partial class OverlayInputWindow : Window
         };
     }
 
-    /// <summary>Capture the target field, position the box, and show it ready for typing.</summary>
-    public void ShowFor()
+    /// <summary>Hotkey path (M1): capture the foreground window as the target and show bottom-centre.</summary>
+    public void ShowFor() => ShowForCore(_focus.CaptureCurrent(), anchor: null);
+
+    /// <summary>Badge path (M2): target the field the watcher resolved, anchored near its rectangle.</summary>
+    public void ShowFor(FocusTarget target, System.Drawing.Rectangle? anchor) => ShowForCore(target, anchor);
+
+    private void ShowForCore(FocusTarget target, System.Drawing.Rectangle? anchor)
     {
-        _target = _focus.CaptureCurrent();
+        _target = target;
         Input.Clear();
-        PositionNearBottomCenter();
         Show();
+        if (anchor is { } a)
+        {
+            PositionNear(a);
+        }
+        else
+        {
+            PositionNearBottomCenter();
+        }
+
         Activate();
         Input.Focus();
     }
@@ -70,6 +83,24 @@ public partial class OverlayInputWindow : Window
         var area = SystemParameters.WorkArea;     // DIPs, primary monitor working area
         Left = area.Left + ((area.Width - Width) / 2);
         Top = area.Top + (area.Height * 0.70);
+    }
+
+    /// <summary>Place the box just below the field. <paramref name="anchorPx"/> is physical pixels;
+    /// convert to DIPs via the window's source (PerMonitorV2). Falls back to bottom-centre if the
+    /// source is not ready.</summary>
+    private void PositionNear(System.Drawing.Rectangle anchorPx)
+    {
+        var source = PresentationSource.FromVisual(this);
+        if (source?.CompositionTarget is null)
+        {
+            PositionNearBottomCenter();
+            return;
+        }
+
+        var dip = source.CompositionTarget.TransformFromDevice.Transform(
+            new Point(anchorPx.Left, anchorPx.Bottom));
+        Left = dip.X;
+        Top = dip.Y + 4;
     }
 
     private async void OnDebounceTick(object? sender, EventArgs e)
