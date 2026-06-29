@@ -63,8 +63,7 @@
                      CaretBrush="White"
                      BorderThickness="0"
                      FontSize="16"
-                     MinHeight="64"
-                     MaxHeight="220"
+                     Height="130"
                      VerticalScrollBarVisibility="Auto" />
         </DockPanel>
     </Border>

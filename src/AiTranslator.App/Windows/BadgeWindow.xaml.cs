@@ -29,17 +29,16 @@ public partial class BadgeWindow : NonActivatingWindow
             Show();
         }
 
-        UpdateLayout();   // so ActualWidth/Height are valid for the inside-the-edge math
+        UpdateLayout();   // so ActualWidth/Height are valid for the inside-the-corner math
 
-        // Grammarly-style: nestle the badge just INSIDE the field's right edge, vertically centred —
-        // not hanging off a corner. dx/dy (DIPs) are optional per-app nudges from that anchor.
+        // Grammarly-style: nestle the badge into the field's BOTTOM-RIGHT corner, just inside the edge
+        // (the badge XAML already carries a margin for its shadow). dx/dy (DIPs) are per-app nudges.
         double scale = ScreenPlacement.ScaleForPoint(fieldRect.Left, fieldRect.Top);
-        int badgeW = (int)Math.Round((ActualWidth > 0 ? ActualWidth : 26) * scale);
-        int badgeH = (int)Math.Round((ActualHeight > 0 ? ActualHeight : 26) * scale);
-        int margin = (int)Math.Round(6 * scale);
+        int badgeW = (int)Math.Round((ActualWidth > 0 ? ActualWidth : 42) * scale);
+        int badgeH = (int)Math.Round((ActualHeight > 0 ? ActualHeight : 42) * scale);
 
-        int x = fieldRect.Right - badgeW - margin + (int)Math.Round(offset.Dx * scale);
-        int y = fieldRect.Top + ((fieldRect.Height - badgeH) / 2) + (int)Math.Round(offset.Dy * scale);
+        int x = fieldRect.Right - badgeW + (int)Math.Round(offset.Dx * scale);
+        int y = fieldRect.Bottom - badgeH + (int)Math.Round(offset.Dy * scale);
 
         ScreenPlacement.MoveTopLeft(new WindowInteropHelper(this).Handle, x, y, topmost: true, activate: false);
     }
