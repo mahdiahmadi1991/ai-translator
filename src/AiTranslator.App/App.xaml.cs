@@ -171,6 +171,9 @@ public partial class App : Application
 
         _badge = new BadgeWindow();
         _badge.Clicked += (_, _) => OnBadgeClicked();
+        _badge.SettingsRequested += (_, _) => OpenSettings();
+        _badge.QuitRequested += (_, _) => Shutdown();
+        _badge.IgnoreAppRequested += (_, _) => IgnoreCurrentApp();
 
         _focusWatcher = new FocusWatcher(() => _settings, _services.GetRequiredService<ITargetResolver>());
         _focusWatcher.FieldFocused += OnFieldFocused;
@@ -205,6 +208,7 @@ public partial class App : Application
     private void ShowBadge(FocusedField field)
     {
         _activeField = field;
+        _badge?.SetAppName(field.ExeName);   // label the right-click "don't show in <app>" item
         if (field.FieldRect is { } rect)
         {
             _badge?.ShowAt(rect, AppOffsets.For(field.ExeName, _settings));
@@ -213,6 +217,25 @@ public partial class App : Application
         {
             _badge?.Hide();   // editable but no bounds — avoid a mis-placed badge; hotkey still works
         }
+    }
+
+    /// <summary>Right-click → "don't show here": add the current app to the blocklist and dismiss.</summary>
+    private void IgnoreCurrentApp()
+    {
+        if (_activeField is not { } field || string.IsNullOrWhiteSpace(field.ExeName))
+        {
+            return;
+        }
+
+        if (!_settings.Blocklist.Contains(field.ExeName))
+        {
+            var updated = _settings with { Blocklist = [.. _settings.Blocklist, field.ExeName] };
+            _settingsStore.Save(updated);
+            _settings = updated;   // the watcher reads this live, so the badge won't return here
+        }
+
+        HideBadge();
+        CloseOverlay();
     }
 
     private void HideBadge()

@@ -22,6 +22,13 @@ public static class UiStrings
 
     // Badge
     public const string BadgeTooltip = "Translate — click to type a translation into this field";
+    public const string BadgeIgnoreFormat = "Don't show the badge in {0}";
+    public const string BadgeIgnoreGeneric = "Don't show the badge in this app";
+    public const string BadgeSettings = "Settings…";
+    public const string BadgeQuit = "Quit AI Translator";
+
+    // Overlay header
+    public const string OverlayClose = "Close";
 
     // Settings
     public const string SettingsTitle = "AI Translator — Settings";
