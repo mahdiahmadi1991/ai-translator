@@ -1,0 +1,23 @@
+<Project>
+  <!--
+    Central package versions (CPM). Versions live ONLY here; csproj PackageReferences are versionless.
+    Test deps are pinned and restore everywhere. The Windows-only deps below are not restorable on
+    this Linux box (net10.0-windows); on the first Windows restore, confirm each exists and bump it to
+    the exact latest stable (run "dotnet list package" with the outdated option). A missing version
+    surfaces as NU1102.
+  -->
+  <ItemGroup>
+    <PackageVersion Include="coverlet.collector" Version="6.0.4" />
+    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageVersion Include="xunit" Version="2.9.3" />
+    <PackageVersion Include="xunit.runner.visualstudio" Version="3.1.4" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageVersion Include="OpenAI" Version="2.11.0" />
+    <PackageVersion Include="Meziantou.Framework.Win32.CredentialManager" Version="1.0.7" />
+    <PackageVersion Include="Microsoft.Windows.CsWin32" Version="0.3.106" />
+    <PackageVersion Include="WPF-UI" Version="4.3.0" />
+    <PackageVersion Include="H.NotifyIcon.Wpf" Version="2.4.0" />
+    <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="9.0.0" />
+  </ItemGroup>
+</Project>

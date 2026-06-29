@@ -1,0 +1,12 @@
+RegisterHotKey
+UnregisterHotKey
+GetForegroundWindow
+SetForegroundWindow
+GetWindowThreadProcessId
+AttachThreadInput
+SendInput
+GetClipboardSequenceNumber
+HOT_KEY_MODIFIERS
+VIRTUAL_KEY
+INPUT
+KEYBDINPUT

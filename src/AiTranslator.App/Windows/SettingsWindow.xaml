@@ -1,0 +1,32 @@
+<Window x:Class="AiTranslator.App.Windows.SettingsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:res="clr-namespace:AiTranslator.App.Resources"
+        Title="{x:Static res:UiStrings.SettingsTitle}"
+        Width="460"
+        SizeToContent="Height"
+        ResizeMode="NoResize"
+        WindowStartupLocation="CenterScreen">
+    <StackPanel Margin="18">
+        <TextBlock Text="{x:Static res:UiStrings.SettingsApiKey}" Margin="0,0,0,2" />
+        <PasswordBox x:Name="ApiKeyBox" Margin="0,0,0,12" />
+
+        <TextBlock Text="{x:Static res:UiStrings.SettingsPrimaryLang}" Margin="0,0,0,2" />
+        <TextBox x:Name="PrimaryBox" Margin="0,0,0,12" />
+
+        <TextBlock Text="{x:Static res:UiStrings.SettingsSecondaryLang}" Margin="0,0,0,2" />
+        <TextBox x:Name="SecondaryBox" Margin="0,0,0,12" />
+
+        <TextBlock Text="{x:Static res:UiStrings.SettingsModel}" Margin="0,0,0,2" />
+        <TextBox x:Name="ModelBox" Margin="0,0,0,12" />
+
+        <TextBlock Text="{x:Static res:UiStrings.SettingsHotkey}" Margin="0,0,0,2" />
+        <TextBox x:Name="HotkeyBox" Margin="0,0,0,12" />
+
+        <CheckBox x:Name="AutoDirectionBox" Content="{x:Static res:UiStrings.SettingsAutoDirection}" Margin="0,0,0,8" />
+        <CheckBox x:Name="RunAtStartupBox" Content="{x:Static res:UiStrings.SettingsRunAtStartup}" Margin="0,0,0,14" />
+
+        <Button x:Name="SaveButton" Content="{x:Static res:UiStrings.SettingsSave}" Click="OnSaveClick" HorizontalAlignment="Right" Padding="16,4" />
+        <TextBlock x:Name="StatusText" Foreground="#FFAAAAAA" Margin="0,10,0,0" />
+    </StackPanel>
+</Window>
