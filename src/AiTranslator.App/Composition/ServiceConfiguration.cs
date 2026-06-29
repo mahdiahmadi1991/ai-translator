@@ -1,5 +1,6 @@
 using AiTranslator.Core.Abstractions;
 using AiTranslator.Core.Settings;
+using AiTranslator.Infrastructure.Awareness;
 using AiTranslator.Infrastructure.Input;
 using AiTranslator.Infrastructure.Secrets;
 using AiTranslator.Infrastructure.Translation;
@@ -17,6 +18,7 @@ public static class ServiceConfiguration
         services.AddSingleton<ISettingsStore>(_ => new JsonSettingsStore(JsonSettingsStore.DefaultPath));
         services.AddSingleton<ISecretStore, CredentialManagerSecretStore>();
         services.AddSingleton<IFocusTargetProvider, ForegroundFocusTargetProvider>();
+        services.AddSingleton<ITargetResolver, TargetResolver>();
         services.AddSingleton<ITextInjector, ClipboardTextInjector>();
         services.AddSingleton<ITranslationService>(sp =>
             new OpenAiTranslationService(() => sp.GetRequiredService<ISecretStore>().GetApiKey()));

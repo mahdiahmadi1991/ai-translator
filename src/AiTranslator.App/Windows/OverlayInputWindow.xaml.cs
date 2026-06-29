@@ -1,6 +1,7 @@
 using System.Text;
 using System.Windows;
 using System.Windows.Input;
+using System.Windows.Interop;
 using System.Windows.Threading;
 using AiTranslator.Core.Abstractions;
 using AiTranslator.Core.Models;
@@ -54,13 +55,26 @@ public partial class OverlayInputWindow : Window
         };
     }
 
-    /// <summary>Capture the target field, position the box, and show it ready for typing.</summary>
-    public void ShowFor()
+    /// <summary>Hotkey path (M1): capture the foreground window as the target and show bottom-centre.</summary>
+    public void ShowFor() => ShowForCore(_focus.CaptureCurrent(), anchor: null);
+
+    /// <summary>Badge path (M2): target the field the watcher resolved, anchored near its rectangle.</summary>
+    public void ShowFor(FocusTarget target, System.Drawing.Rectangle? anchor) => ShowForCore(target, anchor);
+
+    private void ShowForCore(FocusTarget target, System.Drawing.Rectangle? anchor)
     {
-        _target = _focus.CaptureCurrent();
+        _target = target;
         Input.Clear();
-        PositionNearBottomCenter();
         Show();
+        if (anchor is { } a)
+        {
+            PositionNear(a);
+        }
+        else
+        {
+            PositionNearBottomCenter();
+        }
+
         Activate();
         Input.Focus();
     }
@@ -70,6 +84,17 @@ public partial class OverlayInputWindow : Window
         var area = SystemParameters.WorkArea;     // DIPs, primary monitor working area
         Left = area.Left + ((area.Width - Width) / 2);
         Top = area.Top + (area.Height * 0.70);
+    }
+
+    /// <summary>Place the box just below the field, in physical pixels via <see cref="ScreenPlacement"/>
+    /// (so it lands on the field's own monitor at the right DPI — not the overlay's current monitor).
+    /// <paramref name="anchorPx"/> is physical pixels.</summary>
+    private void PositionNear(System.Drawing.Rectangle anchorPx)
+    {
+        double scale = ScreenPlacement.ScaleForPoint(anchorPx.Left, anchorPx.Bottom);
+        int gap = (int)Math.Round(4 * scale);
+        ScreenPlacement.MoveTopLeft(
+            new WindowInteropHelper(this).Handle, anchorPx.Left, anchorPx.Bottom + gap, topmost: false, activate: true);
     }
 
     private async void OnDebounceTick(object? sender, EventArgs e)

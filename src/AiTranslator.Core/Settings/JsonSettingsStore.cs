@@ -7,7 +7,15 @@ namespace AiTranslator.Core.Settings;
 /// <summary>Persists settings as indented JSON. Returns defaults when the file is missing or corrupt.</summary>
 public sealed class JsonSettingsStore : ISettingsStore
 {
-    private static readonly JsonSerializerOptions Options = new() { WriteIndented = true };
+    // camelCase property names match the documented schema (docs/reference/configuration.md) so a
+    // hand-edited settings.json round-trips; case-insensitive read keeps any older PascalCase file
+    // loadable. Dictionary KEYS (appOffsets exe names) are intentionally left untransformed.
+    private static readonly JsonSerializerOptions Options = new()
+    {
+        WriteIndented = true,
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        PropertyNameCaseInsensitive = true,
+    };
     private readonly string _filePath;
 
     public JsonSettingsStore(string filePath) => _filePath = filePath;

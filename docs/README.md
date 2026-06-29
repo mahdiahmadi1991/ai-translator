@@ -23,9 +23,10 @@ just routes you there.
 
 ## Project status
 
-**M1 (walking skeleton) in progress; development is now native on Windows.** The `src/` solution
-exists: **Core + Tests are built and green (31/31)**; **Infrastructure + App** are written and await
-their first **Windows build**. Full picture and next steps: [status.md](status.md).
+**Development is native on Windows; M1 builds green and M2 awareness machinery has landed.** The
+`src/` solution builds **0/0 on Windows** with **40/40 tests green**; the app launches. M1's remaining
+gate is the manual runtime acceptance test; M2 (badge auto-appearance) is built and needs per-app
+verification. Full picture and next steps: [status.md](status.md).
 
 ## Conventions for this docs tree
 

@@ -6,6 +6,9 @@
     <UseWPF>true</UseWPF>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <RootNamespace>AiTranslator.App</RootNamespace>
+    <!-- AllowUnsafeBlocks: required by the LibraryImport source generator (SYSLIB1062) used for the
+         badge's window-style / SetWindowPos P/Invokes in Windows/NonActivatingWindow.cs & BadgeWindow. -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
 
   <ItemGroup>

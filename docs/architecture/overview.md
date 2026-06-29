@@ -157,17 +157,21 @@ See [ADR-0002](decision-records/0002-translation-openai-responses-streaming.md) 
 ## 9. Roadmap
 
 1. **M0 — Workspace & design** (done): repo, standards-compliant docs, ADRs, this spec.
-2. **M1 — Walking skeleton** (in progress): tray app + settings + Credential Manager key +
+2. **M1 — Walking skeleton** (built on Windows): tray app + settings + Credential Manager key +
    manual-hotkey overlay + OpenAI streaming translation + clipboard injection into the *currently
    focused* field (no badge yet). Proves the end-to-end path on Win32 targets.
-   *Status:* code written for all layers; cross-platform **Core + Tests built and green** on Linux;
-   **Infrastructure + App await their first Windows build** —
+   *Status:* all layers **build green on Windows** (`dotnet build` 0/0, `dotnet test` 40/40) and the
+   app launches; the remaining gate is the manual runtime acceptance test —
    [windows-build-checklist.md](../guides/windows-build-checklist.md). Plan:
    [plans/2026-06-28-m1-walking-skeleton.md](../plans/2026-06-28-m1-walking-skeleton.md).
-3. **M2 — Grammarly-style awareness:** `FocusWatcher` + `TargetResolver` + `BadgeWindow` with UIA;
-   allowlist; per-app offset calibration.
-4. **M3 — Chromium/WebView2 + Qt coverage:** IAccessible2 enable path for WhatsApp(WebView2)/Electron;
-   Telegram(Qt) anchoring; live-replace injection tuning.
+3. **M2 — Grammarly-style awareness** (built on Windows): `FocusWatcher` (SetWinEventHook) +
+   `TargetResolver` (managed UIA) + non-activating `BadgeWindow`; allowlist/blocklist editor;
+   per-app offset calibration (`appOffsets`). *Status:* machinery built (0/0) and the watcher runs;
+   per-app badge behaviour (WhatsApp/Telegram) is validated app-by-app.
+   Plan: [plans/2026-06-29-m2-awareness.md](../plans/2026-06-29-m2-awareness.md).
+4. **M3 — Chromium/WebView2 + Qt coverage:** IAccessible2 enable path for WhatsApp(WebView2)/Electron
+   (if UIA proves insufficient); Telegram(Qt) anchoring; non-activating overlay + live-replace
+   injection tuning (no focus flicker).
 5. **M4 — Hardening & release:** logging, error states, code signing, Velopack auto-update.
 
 Each milestone gets its own plan via the writing-plans workflow before code is written.

@@ -16,6 +16,9 @@ public static class UiStrings
     // Overlay
     public const string OverlayHint = "Type here — translation replaces the focused field";
 
+    // Badge
+    public const string BadgeTooltip = "Translate — click to type a translation into this field";
+
     // Settings
     public const string SettingsTitle = "AI Translator — Settings";
     public const string SettingsApiKey = "OpenAI API key";
@@ -24,8 +27,13 @@ public static class UiStrings
     public const string SettingsModel = "Model";
     public const string SettingsHotkey = "Hotkey (e.g. Ctrl+Alt+T)";
     public const string SettingsAutoDirection = "Auto-detect direction";
+    public const string SettingsAutoAppearBadge = "Show the badge automatically in allowlisted apps";
     public const string SettingsRunAtStartup = "Run at Windows startup";
+    public const string SettingsAllowlist = "Allowlist — apps where the badge appears (one exe per line)";
+    public const string SettingsBlocklist = "Blocklist — apps to always suppress (one exe per line)";
     public const string SettingsSave = "Save";
     public const string SettingsHotkeyTaken = "That hotkey is in use — pick another.";
+    public const string SettingsHotkeyInvalid = "Not a valid hotkey (e.g. Ctrl+Alt+T).";
     public const string SettingsSaved = "Saved.";
+    public const string SettingsSaveError = "Couldn't fully save:";
 }
