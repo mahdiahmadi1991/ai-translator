@@ -16,17 +16,19 @@ dotnet build   src/AiTranslator.slnx -c Debug
 dotnet run --project src/AiTranslator.App
 ```
 
-## 1. Package versions ([Directory.Packages.props](../../src/Directory.Packages.props))
+## 1. Package restore ([Directory.Packages.props](../../src/Directory.Packages.props), [nuget.config](../../src/nuget.config))
 
-The Windows-only package versions are best-effort estimates. Confirm each resolves; a missing one
-is `NU1102`. Bump to the latest stable:
+Package versions are now pinned to versions **verified to exist on nuget.org** (2026-06-29), and
+[nuget.config](../../src/nuget.config) adds **package source mapping** so a machine-global `github`
+source no longer breaks restore under CPM (`NU1507`). If restore still complains about a version,
+bump it:
 
 ```powershell
 dotnet list src/AiTranslator.slnx package --outdated
 ```
 
-Packages to verify: `OpenAI`, `Meziantou.Framework.Win32.CredentialManager`,
-`Microsoft.Windows.CsWin32`, `WPF-UI`, `H.NotifyIcon.Wpf`, `Microsoft.Extensions.DependencyInjection`.
+Note: `Meziantou.Framework.Win32.CredentialManager` is held at `1.1.0` (classic API used by the
+code); `2.x` exists but its API must be verified before bumping.
 
 ## 2. OpenAI SDK — [OpenAiTranslationService.cs](../../src/AiTranslator.Infrastructure/Translation/OpenAiTranslationService.cs)
 
@@ -57,8 +59,9 @@ CsWin32 generates the P/Invokes from [NativeMethods.txt](../../src/AiTranslator.
 
 ## 5. WPF — App.xaml, windows, tray
 
-- [ ] [App.xaml](../../src/AiTranslator.App/App.xaml): WPF-UI `xmlns:ui` + `ThemesDictionary` /
-      `ControlsDictionary` match WPF-UI 4.x.
+- [x] [App.xaml](../../src/AiTranslator.App/App.xaml): WPF-UI `xmlns:ui` + `ThemesDictionary` /
+      `ControlsDictionary` — confirmed correct for WPF-UI 4.x (context7). An `MC3074
+      "ThemesDictionary does not exist"` warning is a cascade of a failed restore (fix §1 first).
 - [ ] [App.xaml.cs](../../src/AiTranslator.App/App.xaml.cs): `H.NotifyIcon` `TaskbarIcon`, `ForceCreate()`,
       `ShowNotification(...)`; tray `Icon = SystemIcons.Application` (placeholder — confirm
       `System.Drawing` resolves, or supply a branded `.ico`; M4).
