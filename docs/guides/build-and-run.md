@@ -24,6 +24,13 @@ dotnet run --project src/AiTranslator.App
 The app starts to the tray. Open settings from the tray icon to enter the OpenAI key (or rely on the
 DEBUG `.secrets` dev key), choose the language pair, and set the hotkey.
 
+> **Smart App Control / WDAC:** a freshly-built, unsigned `AiTranslator.App.exe` (apphost) is blocked
+> by Windows ("Part of this app has been blocked … can't confirm who published…"). So **Debug builds
+> emit no `.exe`** (`UseAppHost=false`); run through the trusted **dotnet host**, which is not blocked:
+> `dotnet run --project src/AiTranslator.App`, or the fast path on the last build
+> `dotnet "src/AiTranslator.App/bin/Debug/net10.0-windows/AiTranslator.App.dll"`. The release apphost
+> is Authenticode-signed (see Publish) so end users don't hit this.
+
 ## Test
 
 ```powershell

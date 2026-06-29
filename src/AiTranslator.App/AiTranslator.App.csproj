@@ -9,6 +9,11 @@
     <!-- AllowUnsafeBlocks: required by the LibraryImport source generator (SYSLIB1062) used for the
          badge's window-style / SetWindowPos P/Invokes in Windows/NonActivatingWindow.cs & BadgeWindow. -->
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <!-- Debug builds emit NO native apphost (.exe). A freshly-built, unsigned apphost is blocked by
+         Windows Smart App Control / WDAC ("can't confirm who published…"). Running via the signed
+         dotnet host (`dotnet run` / `dotnet …App.dll`) is trusted, so the dev loop isn't blocked.
+         Release keeps the apphost for packaging + Authenticode signing (ADR-0006). -->
+    <UseAppHost Condition="'$(Configuration)' == 'Debug'">false</UseAppHost>
   </PropertyGroup>
 
   <ItemGroup>
