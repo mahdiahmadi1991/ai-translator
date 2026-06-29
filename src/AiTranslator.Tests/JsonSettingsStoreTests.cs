@@ -57,6 +57,28 @@ public class JsonSettingsStoreTests : IDisposable
     }
 
     [Fact]
+    public void Saves_camel_case_keys_matching_the_documented_schema()
+    {
+        new JsonSettingsStore(_path).Save(AppSettings.Default with { AutoAppearBadge = false });
+        var json = File.ReadAllText(_path);
+
+        Assert.Contains("\"autoAppearBadge\"", json);   // docs/reference/configuration.md uses camelCase
+        Assert.Contains("\"allowlist\"", json);
+        Assert.DoesNotContain("\"AutoAppearBadge\"", json);
+    }
+
+    [Fact]
+    public void Loads_legacy_pascal_case_file()
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(_path)!);
+        File.WriteAllText(_path, "{ \"Model\": \"legacy-x\", \"DebounceMs\": 999 }");
+
+        var loaded = new JsonSettingsStore(_path).Load();
+        Assert.Equal("legacy-x", loaded.Model);   // case-insensitive read keeps old PascalCase files working
+        Assert.Equal(999, loaded.DebounceMs);
+    }
+
+    [Fact]
     public void Load_returns_defaults_on_corrupt_json()
     {
         Directory.CreateDirectory(Path.GetDirectoryName(_path)!);
