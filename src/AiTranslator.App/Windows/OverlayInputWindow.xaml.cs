@@ -1,7 +1,9 @@
 using System.Text;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Interop;
+using System.Windows.Media;
 using System.Windows.Threading;
 using AiTranslator.App.Resources;
 using AiTranslator.Core.Abstractions;
@@ -92,6 +94,32 @@ public partial class OverlayInputWindow : Window
     private void OnSettingsClick(object sender, RoutedEventArgs e) => SettingsRequested?.Invoke(this, EventArgs.Empty);
 
     private void OnCloseClick(object sender, RoutedEventArgs e) => Hide();   // close = hide; the draft is kept
+
+    private void OnHeaderMouseDown(object sender, MouseButtonEventArgs e)
+    {
+        // Drag the box by its header — but not when the press lands on a header button (gear/close).
+        if (e.ChangedButton != MouseButton.Left || IsWithinButton(e.OriginalSource as DependencyObject))
+        {
+            return;
+        }
+
+        try { DragMove(); } catch { /* DragMove throws if the button was already released — ignore */ }
+    }
+
+    private static bool IsWithinButton(DependencyObject? node)
+    {
+        while (node is not null)
+        {
+            if (node is Button)
+            {
+                return true;
+            }
+
+            node = node is Visual or System.Windows.Media.Media3D.Visual3D ? VisualTreeHelper.GetParent(node) : null;
+        }
+
+        return false;
+    }
 
     /// <summary>Hotkey path: capture the foreground window as the target and show bottom-centre.</summary>
     public void ShowFor() => ShowForCore(_focus.CaptureCurrent(), anchor: null);
@@ -221,7 +249,9 @@ public partial class OverlayInputWindow : Window
                 await _injector.ReplaceTextAsync(_target, translation, ct);
             }
 
-            // Success: clear the draft and dismiss the box (focus returns to the messenger).
+            // Put the target's caret at the end of the inserted text, then clear the draft and dismiss
+            // (focus returns to the messenger, ready to keep typing / send).
+            _injector.PlaceCaretAtEnd(_target);
             Input.Clear();
             ClearStatus();
             Hide();
