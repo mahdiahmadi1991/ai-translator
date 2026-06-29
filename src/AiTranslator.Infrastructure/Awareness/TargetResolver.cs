@@ -213,29 +213,129 @@ public sealed class TargetResolver : ITargetResolver
             return found;
         }
 
+        bool Collect(nint h, nint _)
+        {
+            if (ClassOf(h).StartsWith("Chrome_", StringComparison.Ordinal))
+            {
+                found.Add(h);
+            }
+
+            return true;
+        }
+
         try
         {
-            // EnumChildWindows recurses through all descendants, crossing process boundaries for
-            // parented children — so the msedgewebview2 render widget nested in WhatsApp is included.
-            EnumChildWindows(top, (h, _) =>
+            // (a) Renderers parented inside the foreground window — the in-process WebView2 / Electron
+            //     case. EnumChildWindows recurses through all descendants, crossing process boundaries.
+            EnumChildWindows(top, Collect, 0);
+
+            // (b) Separate top-level WebView2 windows owned by the foreground app's PROCESS family. The
+            //     "WhatsApp Business" case: the chat is a standalone msedgewebview2 top-level window
+            //     (not a child window, not owned) whose process is a child of WhatsApp.Root.exe — so we
+            //     match by process ancestry, then drill its renderer for the keyboard-focused field.
+            uint fgPid = PidOf(top);
+            if (fgPid != 0)
             {
-                if (ClassOf(h).StartsWith("Chrome_", StringComparison.Ordinal))
+                var family = ProcessFamily(fgPid);
+                EnumWindows((w, _) =>
                 {
-                    found.Add(h);
-                }
+                    if (w != top
+                        && IsWindowVisible(w)
+                        && ClassOf(w).StartsWith("Chrome_", StringComparison.Ordinal)
+                        && family.Contains(PidOf(w)))
+                    {
+                        found.Add(w);
+                        EnumChildWindows(w, Collect, 0);
+                    }
 
-                return true;
-            }, 0);
+                    return true;
+                }, 0);
+            }
         }
-        catch { /* enumeration is best-effort */ }
+        catch { /* discovery is best-effort */ }
 
-        // Wake/drill the actual renderer first; its widget-host parents are lower priority.
-        found.Sort((a, b) => RenderRank(ClassOf(a)).CompareTo(RenderRank(ClassOf(b))));
-        return found;
+        // De-duplicate, renderers first (the actual wake/drill target; widget hosts are lower priority).
+        var unique = new List<nint>();
+        var seen = new HashSet<nint>();
+        foreach (nint h in found)
+        {
+            if (seen.Add(h))
+            {
+                unique.Add(h);
+            }
+        }
+
+        unique.Sort((a, b) => RenderRank(ClassOf(a)).CompareTo(RenderRank(ClassOf(b))));
+        return unique;
     }
 
     private static int RenderRank(string cls) =>
         cls == "Chrome_RenderWidgetHostHWND" ? 0 : 1;
+
+    private static uint PidOf(nint hwnd)
+    {
+        GetWindowThreadProcessId(hwnd, out uint pid);
+        return pid;
+    }
+
+    /// <summary>The given process id plus every process descended from it (WebView2 spawns
+    /// msedgewebview2.exe as a child of the host app, so its window belongs to this family).</summary>
+    private static HashSet<uint> ProcessFamily(uint rootPid)
+    {
+        var family = new HashSet<uint> { rootPid };
+        var children = new Dictionary<uint, List<uint>>();
+
+        try
+        {
+            nint snap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+            if (snap == InvalidHandle)
+            {
+                return family;
+            }
+
+            try
+            {
+                var pe = new PROCESSENTRY32 { dwSize = (uint)Marshal.SizeOf<PROCESSENTRY32>() };
+                if (Process32First(snap, ref pe))
+                {
+                    do
+                    {
+                        if (!children.TryGetValue(pe.th32ParentProcessID, out var kids))
+                        {
+                            children[pe.th32ParentProcessID] = kids = new List<uint>();
+                        }
+
+                        kids.Add(pe.th32ProcessID);
+                    }
+                    while (Process32Next(snap, ref pe));
+                }
+            }
+            finally
+            {
+                CloseHandle(snap);
+            }
+
+            var queue = new Queue<uint>();
+            queue.Enqueue(rootPid);
+            while (queue.Count > 0)
+            {
+                uint p = queue.Dequeue();
+                if (children.TryGetValue(p, out var kids))
+                {
+                    foreach (uint k in kids)
+                    {
+                        if (family.Add(k))
+                        {
+                            queue.Enqueue(k);
+                        }
+                    }
+                }
+            }
+        }
+        catch { /* snapshot is best-effort; fall back to just the root pid */ }
+
+        return family;
+    }
 
     /// <summary>Wake a window's accessibility tree the first time we see it, recording when.</summary>
     private void WakeOnce(nint hwnd)
@@ -339,11 +439,25 @@ public sealed class TargetResolver : ITargetResolver
 
     // --- P/Invoke (raw DllImport; CsWin32 is used elsewhere but these are local to the resolver) ---
 
+    private const uint TH32CS_SNAPPROCESS = 0x00000002;
+    private static readonly nint InvalidHandle = new(-1);
+
     private delegate bool EnumWindowsProc(nint hWnd, nint lParam);
 
     [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool EnumWindows(EnumWindowsProc lpEnumFunc, nint lParam);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool EnumChildWindows(nint hWndParent, EnumWindowsProc lpEnumFunc, nint lParam);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool IsWindowVisible(nint hWnd);
+
+    [DllImport("user32.dll")]
+    private static extern uint GetWindowThreadProcessId(nint hWnd, out uint lpdwProcessId);
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode, EntryPoint = "GetClassNameW")]
     private static extern int GetClassName(nint hWnd, [Out] char[] lpClassName, int nMaxCount);
@@ -352,6 +466,38 @@ public sealed class TargetResolver : ITargetResolver
     private static extern int AccessibleObjectFromWindow(
         nint hwnd, uint dwId, ref Guid riid,
         [MarshalAs(UnmanagedType.Interface)] out object? ppvObject);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern nint CreateToolhelp32Snapshot(uint dwFlags, uint th32ProcessID);
+
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool Process32First(nint hSnapshot, ref PROCESSENTRY32 lppe);
+
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool Process32Next(nint hSnapshot, ref PROCESSENTRY32 lppe);
+
+    [DllImport("kernel32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool CloseHandle(nint hObject);
+
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    private struct PROCESSENTRY32
+    {
+        public uint dwSize;
+        public uint cntUsage;
+        public uint th32ProcessID;
+        public nint th32DefaultHeapID;
+        public uint th32ModuleID;
+        public uint cntThreads;
+        public uint th32ParentProcessID;
+        public int pcPriClassBase;
+        public uint dwFlags;
+
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 260)]
+        public string szExeFile;
+    }
 
     // --- diagnostics (shared log with the focus watcher; on by default, AITR_FOCUS_LOG=0 disables) ---
 
@@ -377,6 +523,7 @@ public sealed class TargetResolver : ITargetResolver
     private static string Snapshot(AutomationElement e) =>
         $"ControlType={Safe(() => e.Current.ControlType.ProgrammaticName)} Class='{Safe(() => e.Current.ClassName)}' " +
         $"Name='{Safe(() => e.Current.Name)}' focusable={Safe(() => e.Current.IsKeyboardFocusable.ToString())} " +
+        $"hasFocus={Safe(() => e.Current.HasKeyboardFocus.ToString())} " +
         $"value={Safe(() => ValueState(e))} text={Safe(() => e.TryGetCurrentPattern(TextPattern.Pattern, out _).ToString())}";
 
     private static string ValueState(AutomationElement e) =>
