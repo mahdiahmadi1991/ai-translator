@@ -1,4 +1,7 @@
+using System.Runtime.InteropServices;
 using System.Windows;
+using System.Windows.Interop;
+using System.Windows.Media;
 using AiTranslator.App.Resources;
 using AiTranslator.App.Shell;
 using AiTranslator.Core.Abstractions;
@@ -10,6 +13,9 @@ namespace AiTranslator.App.Windows;
 /// <summary>Edits non-secret settings and the OpenAI key. Raises <see cref="Saved"/> so the host re-registers the hotkey.</summary>
 public partial class SettingsWindow : Window
 {
+    private static readonly Brush OkBrush = new SolidColorBrush(Color.FromRgb(0x4C, 0xAF, 0x50));
+    private static readonly Brush ErrBrush = new SolidColorBrush(Color.FromRgb(0xE0, 0x6C, 0x75));
+
     private readonly ISettingsStore _settingsStore;
     private readonly ISecretStore _secretStore;
     private AppSettings _current;
@@ -26,6 +32,18 @@ public partial class SettingsWindow : Window
         HotkeyBox.TextChanged += (_, _) => ValidateHotkey();
         LoadIntoFields();
         ValidateHotkey();
+    }
+
+    protected override void OnSourceInitialized(EventArgs e)
+    {
+        base.OnSourceInitialized(e);
+        try
+        {
+            nint hwnd = new WindowInteropHelper(this).Handle;
+            int enabled = 1;
+            DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, ref enabled, sizeof(int));
+        }
+        catch { /* dark title bar is cosmetic — never fail the window over it */ }
     }
 
     private void LoadIntoFields()
@@ -90,12 +108,19 @@ public partial class SettingsWindow : Window
         }
         catch (Exception ex)
         {
+            StatusText.Foreground = ErrBrush;
             StatusText.Text = $"{UiStrings.SettingsSaveError} {ex.Message}";
             return;
         }
 
         _current = updated;
-        StatusText.Text = UiStrings.SettingsSaved;
+        StatusText.Foreground = OkBrush;
+        StatusText.Text = "✓ " + UiStrings.SettingsSaved;
         Saved?.Invoke(updated);
     }
+
+    private const int DWMWA_USE_IMMERSIVE_DARK_MODE = 20;
+
+    [LibraryImport("dwmapi.dll")]
+    private static partial int DwmSetWindowAttribute(nint hwnd, int attribute, ref int pvAttribute, int cbAttribute);
 }
