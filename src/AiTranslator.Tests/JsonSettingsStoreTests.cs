@@ -1,3 +1,4 @@
+using AiTranslator.Core.Awareness;
 using AiTranslator.Core.Models;
 using AiTranslator.Core.Settings;
 using Xunit;
@@ -27,6 +28,32 @@ public class JsonSettingsStoreTests : IDisposable
         Assert.Equal("gpt-5.1-mini", reloaded.Model);
         Assert.Equal(750, reloaded.DebounceMs);
         Assert.Equal("fa", reloaded.LanguagePair.Primary);
+    }
+
+    [Fact]
+    public void Save_then_load_round_trips_app_offsets_and_lists()
+    {
+        var store = new JsonSettingsStore(_path);
+        var custom = AppSettings.Default with
+        {
+            AutoAppearBadge = false,
+            Allowlist = new[] { "Foo.exe", "Bar.exe" },
+            Blocklist = new[] { "KeePass.exe" },
+            AppOffsets = new Dictionary<string, AppOffset>
+            {
+                ["WhatsApp.exe"] = new AppOffset(Corner: 2, Dx: 12, Dy: -4),
+                ["Telegram.exe"] = new AppOffset(Corner: 1, Dx: 64, Dy: -6),
+            },
+        };
+        store.Save(custom);
+
+        var reloaded = new JsonSettingsStore(_path).Load();
+        Assert.False(reloaded.AutoAppearBadge);
+        Assert.Equal(new[] { "Foo.exe", "Bar.exe" }, reloaded.Allowlist);
+        Assert.Equal(new[] { "KeePass.exe" }, reloaded.Blocklist);
+        Assert.Equal(2, reloaded.AppOffsets.Count);
+        Assert.Equal(new AppOffset(2, 12, -4), reloaded.AppOffsets["WhatsApp.exe"]);
+        Assert.Equal(new AppOffset(1, 64, -6), reloaded.AppOffsets["Telegram.exe"]);
     }
 
     [Fact]
