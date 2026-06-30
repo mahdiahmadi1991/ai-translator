@@ -14,8 +14,10 @@
         Foreground="{DynamicResource TextFillColorPrimaryBrush}"
         FontFamily="Segoe UI Variable Text, Segoe UI">
 
+    <!-- Opaque base: the themed card brush is translucent (meant to sit over a Mica backdrop), which
+         left this stand-alone transparent window glassy and hard to read. Use a solid dark fill. -->
     <Border CornerRadius="10" BorderThickness="1"
-            Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
+            Background="#FF1E1E22"
             BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}">
         <DockPanel>
             <!-- Header: logo + direction (left); settings + close (right). Drag it to move the box. -->
@@ -61,6 +63,9 @@
                             <ui:SymbolIcon Symbol="Translate24" />
                         </ui:Button.Icon>
                     </ui:Button>
+                    <ui:ProgressRing x:Name="Busy" DockPanel.Dock="Right" Width="20" Height="20"
+                                     Margin="0,0,10,0" VerticalAlignment="Center"
+                                     IsIndeterminate="True" Visibility="Collapsed" />
                     <ui:TextBlock x:Name="Status" VerticalAlignment="Center" FontTypography="Caption"
                                   Foreground="{DynamicResource SystemFillColorCriticalBrush}"
                                   TextWrapping="Wrap" Visibility="Collapsed" Margin="0,0,10,0" />
