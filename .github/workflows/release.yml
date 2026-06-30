@@ -38,6 +38,7 @@ jobs:
           output-file: 'CHANGELOG.md'
           skip-version-file: 'true'
           tag-prefix: 'v'
+          fallback-version: '1.0.0'   # the first release is exactly 1.0.0; later ones bump from there
           git-message: 'chore(release): {version} [skip ci]'
 
       - name: Publish (self-contained, no .NET prerequisite for users)
