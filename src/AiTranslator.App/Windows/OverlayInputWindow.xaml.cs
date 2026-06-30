@@ -202,11 +202,14 @@ public partial class OverlayInputWindow : Window
             return;
         }
 
+        // Enter the busy state and paint it BEFORE the network call (which runs synchronously up to its
+        // first await) so the button disables and the spinner appears immediately, without a lag.
         _busy = true;
         TranslateButton.IsEnabled = false;
-        var label = TranslateButton.Content;
         TranslateButton.Content = UiStrings.OverlayTranslating;
+        Busy.Visibility = Visibility.Visible;
         ClearStatus();
+        await Dispatcher.Yield(DispatcherPriority.Background);
 
         _inflight?.Cancel();
         _inflight?.Dispose();
@@ -249,8 +252,9 @@ public partial class OverlayInputWindow : Window
         finally
         {
             _busy = false;
-            TranslateButton.Content = label;
             TranslateButton.IsEnabled = true;
+            TranslateButton.Content = UiStrings.OverlayTranslate;
+            Busy.Visibility = Visibility.Collapsed;
         }
     }
 
