@@ -260,11 +260,21 @@ public partial class App : Application
             return;
         }
 
-        _settingsWindow = new SettingsWindow(_settingsStore, _secretStore);
-        _settingsWindow.Saved += OnSettingsSaved;
-        _settingsWindow.Closed += (_, _) => _settingsWindow = null;
-        _settingsWindow.Show();
-        _settingsWindow.Activate();
+        // A fault while building/showing the settings window must never take down the tray app — surface
+        // it as a notification instead of an unhandled dispatcher exception.
+        try
+        {
+            _settingsWindow = new SettingsWindow(_settingsStore, _secretStore);
+            _settingsWindow.Saved += OnSettingsSaved;
+            _settingsWindow.Closed += (_, _) => _settingsWindow = null;
+            _settingsWindow.Show();
+            _settingsWindow.Activate();
+        }
+        catch (Exception ex)
+        {
+            _settingsWindow = null;
+            _tray?.ShowNotification(title: UiStrings.AppName, message: $"{UiStrings.SettingsSaveError} {ex.Message}");
+        }
     }
 
     private void OnSettingsSaved(AppSettings updated)
