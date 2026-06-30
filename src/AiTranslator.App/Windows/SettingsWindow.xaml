@@ -119,26 +119,31 @@
                             </Ellipse>
                         </Grid>
                         <ControlTemplate.Triggers>
-                            <EventTrigger RoutedEvent="CheckBox.Checked">
-                                <BeginStoryboard>
-                                    <Storyboard>
-                                        <DoubleAnimation Storyboard.TargetName="tt" Storyboard.TargetProperty="X"
-                                                         To="20" Duration="0:0:0.16" />
-                                        <DoubleAnimation Storyboard.TargetName="on" Storyboard.TargetProperty="Opacity"
-                                                         To="1" Duration="0:0:0.16" />
-                                    </Storyboard>
-                                </BeginStoryboard>
-                            </EventTrigger>
-                            <EventTrigger RoutedEvent="CheckBox.Unchecked">
-                                <BeginStoryboard>
-                                    <Storyboard>
-                                        <DoubleAnimation Storyboard.TargetName="tt" Storyboard.TargetProperty="X"
-                                                         To="0" Duration="0:0:0.16" />
-                                        <DoubleAnimation Storyboard.TargetName="on" Storyboard.TargetProperty="Opacity"
-                                                         To="0" Duration="0:0:0.16" />
-                                    </Storyboard>
-                                </BeginStoryboard>
-                            </EventTrigger>
+                            <!-- Property trigger (not an EventTrigger): EnterActions run when the template
+                                 is realized, so setting IsChecked in code before the window is shown can't
+                                 fire a storyboard against an un-built name scope (which crashed). -->
+                            <Trigger Property="IsChecked" Value="True">
+                                <Trigger.EnterActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetName="tt" Storyboard.TargetProperty="X"
+                                                             To="20" Duration="0:0:0.16" />
+                                            <DoubleAnimation Storyboard.TargetName="on" Storyboard.TargetProperty="Opacity"
+                                                             To="1" Duration="0:0:0.16" />
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </Trigger.EnterActions>
+                                <Trigger.ExitActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetName="tt" Storyboard.TargetProperty="X"
+                                                             To="0" Duration="0:0:0.16" />
+                                            <DoubleAnimation Storyboard.TargetName="on" Storyboard.TargetProperty="Opacity"
+                                                             To="0" Duration="0:0:0.16" />
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </Trigger.ExitActions>
+                            </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
                 </Setter.Value>
