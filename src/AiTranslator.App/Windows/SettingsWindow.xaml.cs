@@ -1,11 +1,11 @@
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Interop;
-using System.Windows.Media;
 using AiTranslator.App.Resources;
 using AiTranslator.App.Shell;
 using AiTranslator.Core.Abstractions;
@@ -14,18 +14,20 @@ using AiTranslator.Core.Models;
 
 namespace AiTranslator.App.Windows;
 
-/// <summary>Edits non-secret settings and the OpenAI key. Raises <see cref="Saved"/> so the host re-registers the hotkey.</summary>
+/// <summary>
+/// Edits non-secret settings and the OpenAI key. Auto-saves: every change is persisted immediately
+/// (text fields on focus-loss / window close) and <see cref="Saved"/> is raised so the host applies it
+/// live — no Save button, no "saved" confirmation. Built on WPF-UI (Fluent) controls.
+/// </summary>
 public partial class SettingsWindow : Window
 {
-    private static readonly Brush OkBrush = new SolidColorBrush(Color.FromRgb(0x4C, 0xAF, 0x50));
-    private static readonly Brush ErrBrush = new SolidColorBrush(Color.FromRgb(0xE0, 0x6C, 0x75));
-
     private readonly ISettingsStore _settingsStore;
     private readonly ISecretStore _secretStore;
     private readonly ObservableCollection<string> _blocklist = new();
     private AppSettings _current;
+    private bool _loading;
 
-    /// <summary>Raised after a successful save with the new settings.</summary>
+    /// <summary>Raised after each successful save with the new settings (host re-applies hotkey/badge).</summary>
     public event Action<AppSettings>? Saved;
 
     public SettingsWindow(ISettingsStore settingsStore, ISecretStore secretStore)
@@ -38,14 +40,9 @@ public partial class SettingsWindow : Window
         PrimaryCombo.ItemsSource = LanguageCatalog.All;
         SecondaryCombo.ItemsSource = LanguageCatalog.All;
         BlocklistItems.ItemsSource = _blocklist;
-        _blocklist.CollectionChanged += (_, _) => UpdateBlocklistEmpty();
-        BlocklistAddBox.TextChanged += (_, _) => UpdateWatermark();
-        HotkeyBox.TextChanged += (_, _) => ValidateHotkey();
 
         LoadIntoFields();
-        ValidateHotkey();
-        UpdateBlocklistEmpty();
-        UpdateWatermark();
+        WireAutoSave();
     }
 
     protected override void OnSourceInitialized(EventArgs e)
@@ -60,8 +57,17 @@ public partial class SettingsWindow : Window
         catch { /* dark title bar is cosmetic — never fail the window over it */ }
     }
 
+    protected override void OnClosing(CancelEventArgs e)
+    {
+        // Flush edits that only persist on focus-loss (text fields) in case the window is closed first.
+        PersistSettings();
+        PersistApiKey();
+        base.OnClosing(e);
+    }
+
     private void LoadIntoFields()
     {
+        _loading = true;
         ApiKeyBox.Password = _secretStore.GetApiKey() ?? string.Empty;
         PrimaryCombo.SelectedItem = LanguageCatalog.Get(_current.LanguagePair.Primary);
         SecondaryCombo.SelectedItem = LanguageCatalog.Get(_current.LanguagePair.Secondary);
@@ -76,58 +82,123 @@ public partial class SettingsWindow : Window
         {
             _blocklist.Add(entry);
         }
+
+        UpdateBlocklistEmpty();
+        ValidateHotkey();
+        _loading = false;
     }
 
-    // ---- General tab helpers ------------------------------------------------------------------
+    private void WireAutoSave()
+    {
+        // Toggles + dropdowns: persist immediately.
+        foreach (var toggle in new[] { AutoDirectionBox, AutoAppearBadgeBox, RunAtStartupBox })
+        {
+            toggle.Checked += OnSettingChanged;
+            toggle.Unchecked += OnSettingChanged;
+        }
+
+        PrimaryCombo.SelectionChanged += (_, _) => PersistSettings();
+        SecondaryCombo.SelectionChanged += (_, _) => PersistSettings();
+
+        // Text fields: validate live, persist on focus-loss (avoids per-keystroke churn / partial values).
+        HotkeyBox.TextChanged += (_, _) => ValidateHotkey();
+        HotkeyBox.LostFocus += (_, _) => PersistSettings();
+        ModelBox.LostFocus += (_, _) => PersistSettings();
+        ApiKeyBox.LostFocus += (_, _) => PersistApiKey();
+
+        // Block list changes (add/remove) persist immediately.
+        _blocklist.CollectionChanged += (_, _) =>
+        {
+            UpdateBlocklistEmpty();
+            PersistSettings();
+        };
+    }
+
+    private void OnSettingChanged(object sender, RoutedEventArgs e) => PersistSettings();
+
+    // ---- Persistence --------------------------------------------------------------------------
+
+    private void PersistSettings()
+    {
+        if (_loading)
+        {
+            return;
+        }
+
+        bool hotkeyValid = HotkeyCombination.TryParse(HotkeyBox.Text.Trim(), out _);
+
+        var updated = _current with
+        {
+            LanguagePair = new LanguagePair(
+                SelectedCode(PrimaryCombo, _current.LanguagePair.Primary),
+                SelectedCode(SecondaryCombo, _current.LanguagePair.Secondary)),
+            Model = string.IsNullOrWhiteSpace(ModelBox.Text) ? _current.Model : ModelBox.Text.Trim(),
+            Hotkey = hotkeyValid ? HotkeyBox.Text.Trim() : _current.Hotkey,   // never persist a bad combo
+            AutoDirection = AutoDirectionBox.IsChecked == true,
+            AutoAppearBadge = AutoAppearBadgeBox.IsChecked == true,
+            RunAtStartup = RunAtStartupBox.IsChecked == true,
+            Blocklist = _blocklist
+                .Select(s => s.Trim())
+                .Where(s => s.Length > 0)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList(),
+        };
+
+        try
+        {
+            _settingsStore.Save(updated);
+            StartupManager.Apply(updated.RunAtStartup);
+        }
+        catch (Exception ex)
+        {
+            ShowError($"{UiStrings.SettingsSaveError} {ex.Message}");
+            return;
+        }
+
+        _current = updated;
+        ClearError();
+        Saved?.Invoke(updated);
+    }
+
+    private void PersistApiKey()
+    {
+        if (_loading)
+        {
+            return;
+        }
+
+        try
+        {
+            var key = ApiKeyBox.Password;
+            if (!string.IsNullOrWhiteSpace(key))
+            {
+                _secretStore.SetApiKey(key);
+            }
+            else if (_secretStore.GetApiKey() is not null)
+            {
+                _secretStore.DeleteApiKey();   // clearing the field removes the stored key
+            }
+
+            ClearError();
+        }
+        catch (Exception ex)
+        {
+            ShowError($"{UiStrings.SettingsSaveError} {ex.Message}");
+        }
+    }
 
     private static string SelectedCode(ComboBox combo, string fallback)
         => combo.SelectedItem is LanguageOption option ? option.Code : fallback;
 
-    /// <summary>Live-validate the hotkey: clear feedback + enable Save when parseable, else block Save.</summary>
+    /// <summary>Live-validate the hotkey and show an inline reason; an invalid combo just isn't saved.</summary>
     private void ValidateHotkey()
     {
         bool valid = HotkeyCombination.TryParse(HotkeyBox.Text.Trim(), out _);
         HotkeyHint.Text = valid ? string.Empty : UiStrings.SettingsHotkeyInvalid;
-        SaveButton.IsEnabled = valid;
-
-        // Save lives in the footer (visible on every tab) but the hotkey field is on General — so mirror
-        // the reason there, otherwise switching tabs shows a disabled Save with no explanation.
-        if (!valid)
-        {
-            StatusText.Foreground = ErrBrush;
-            StatusText.Text = UiStrings.SettingsHotkeyInvalid;
-        }
-        else if (StatusText.Text == UiStrings.SettingsHotkeyInvalid)
-        {
-            StatusText.Text = string.Empty;   // clear only our own message, never a save result
-        }
+        HotkeyHint.Visibility = valid ? Visibility.Collapsed : Visibility.Visible;
     }
 
-    // ---- Account tab: reveal / hide the key ---------------------------------------------------
-
-    private void OnToggleRevealKey(object sender, RoutedEventArgs e)
-    {
-        bool revealing = ApiKeyReveal.Visibility != Visibility.Visible;
-        if (revealing)
-        {
-            ApiKeyReveal.Text = ApiKeyBox.Password;
-            ApiKeyBox.Visibility = Visibility.Collapsed;
-            ApiKeyReveal.Visibility = Visibility.Visible;
-            ShowKeyButton.Content = "Hide";
-        }
-        else
-        {
-            ApiKeyBox.Password = ApiKeyReveal.Text;
-            ApiKeyReveal.Visibility = Visibility.Collapsed;
-            ApiKeyBox.Visibility = Visibility.Visible;
-            ShowKeyButton.Content = UiStrings.SettingsApiKeyShow;
-        }
-    }
-
-    private string CurrentApiKey()
-        => ApiKeyReveal.Visibility == Visibility.Visible ? ApiKeyReveal.Text : ApiKeyBox.Password;
-
-    // ---- Block List tab -----------------------------------------------------------------------
+    // ---- Block list ---------------------------------------------------------------------------
 
     private void OnBlocklistAddClick(object sender, RoutedEventArgs e) => AddBlocklistEntry();
 
@@ -150,85 +221,36 @@ public partial class SettingsWindow : Window
 
         if (!_blocklist.Any(x => string.Equals(x, entry, StringComparison.OrdinalIgnoreCase)))
         {
-            _blocklist.Add(entry);
+            _blocklist.Add(entry);   // CollectionChanged persists
         }
 
-        BlocklistAddBox.Clear();
+        BlocklistAddBox.Text = string.Empty;
         BlocklistAddBox.Focus();
     }
 
     private void OnBlocklistRemoveClick(object sender, RoutedEventArgs e)
     {
-        if (sender is Button { Tag: string entry })
+        if (sender is FrameworkElement { Tag: string entry })
         {
-            _blocklist.Remove(entry);
+            _blocklist.Remove(entry);   // CollectionChanged persists
         }
     }
 
     private void UpdateBlocklistEmpty()
         => BlocklistEmpty.Visibility = _blocklist.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
 
-    private void UpdateWatermark()
-        => BlocklistAddWatermark.Visibility =
-            string.IsNullOrEmpty(BlocklistAddBox.Text) ? Visibility.Visible : Visibility.Collapsed;
+    // ---- Error surface (auto-save has no status line; only failures are shown) -----------------
 
-    // ---- Save ---------------------------------------------------------------------------------
-
-    private void OnSaveClick(object sender, RoutedEventArgs e)
+    private void ShowError(string message)
     {
-        if (!HotkeyCombination.TryParse(HotkeyBox.Text.Trim(), out _))
-        {
-            ValidateHotkey();   // defensive: Save is disabled while invalid, but never persist a bad combo
-            return;
-        }
+        ErrorText.Text = message;
+        ErrorText.Visibility = Visibility.Visible;
+    }
 
-        var updated = _current with
-        {
-            LanguagePair = new LanguagePair(
-                SelectedCode(PrimaryCombo, _current.LanguagePair.Primary),
-                SelectedCode(SecondaryCombo, _current.LanguagePair.Secondary)),
-            Model = ModelBox.Text.Trim(),
-            Hotkey = HotkeyBox.Text.Trim(),
-            AutoDirection = AutoDirectionBox.IsChecked == true,
-            AutoAppearBadge = AutoAppearBadgeBox.IsChecked == true,
-            RunAtStartup = RunAtStartupBox.IsChecked == true,
-            Blocklist = _blocklist
-                .Select(s => s.Trim())
-                .Where(s => s.Length > 0)
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .ToList(),
-        };
-
-        // Persist + apply side effects defensively: the credential write and the HKCU Run-key write
-        // can throw (interop / registry lock / policy). Surface a non-fatal message instead of letting
-        // an unhandled dispatcher exception crash the app.
-        try
-        {
-            _settingsStore.Save(updated);
-
-            var key = CurrentApiKey();
-            if (!string.IsNullOrWhiteSpace(key))
-            {
-                _secretStore.SetApiKey(key);
-            }
-            else if (_secretStore.GetApiKey() is not null)
-            {
-                _secretStore.DeleteApiKey();   // clearing the field removes the stored key
-            }
-
-            StartupManager.Apply(updated.RunAtStartup);
-        }
-        catch (Exception ex)
-        {
-            StatusText.Foreground = ErrBrush;
-            StatusText.Text = $"{UiStrings.SettingsSaveError} {ex.Message}";
-            return;
-        }
-
-        _current = updated;
-        StatusText.Foreground = OkBrush;
-        StatusText.Text = "✓ " + UiStrings.SettingsSaved;
-        Saved?.Invoke(updated);
+    private void ClearError()
+    {
+        ErrorText.Text = string.Empty;
+        ErrorText.Visibility = Visibility.Collapsed;
     }
 
     private const int DWMWA_USE_IMMERSIVE_DARK_MODE = 20;
