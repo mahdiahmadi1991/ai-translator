@@ -100,10 +100,27 @@ public partial class App : Application
         _tray = new TaskbarIcon
         {
             ToolTipText = UiStrings.TrayTooltip,
-            Icon = SystemIcons.Application,   // TODO(quality): replace with a branded .ico (M4)
+            Icon = LoadAppIcon(),
             ContextMenu = menu,
         };
         _tray.ForceCreate();
+    }
+
+    /// <summary>The branded app icon (embedded as a Resource) for the tray; falls back to the system icon.</summary>
+    private static Icon LoadAppIcon()
+    {
+        try
+        {
+            var info = GetResourceStream(new Uri("pack://application:,,,/app.ico"));
+            if (info is not null)
+            {
+                using var stream = info.Stream;
+                return new Icon(stream);
+            }
+        }
+        catch { /* fall through to the system icon */ }
+
+        return SystemIcons.Application;
     }
 
     private void ShowOverlay(FocusTarget? target = null, System.Drawing.Rectangle? anchor = null)

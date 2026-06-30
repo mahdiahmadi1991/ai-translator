@@ -5,7 +5,16 @@
     <TargetFramework>net10.0-windows</TargetFramework>
     <UseWPF>true</UseWPF>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>app.ico</ApplicationIcon>
     <RootNamespace>AiTranslator.App</RootNamespace>
+
+    <!-- Exe metadata (shown in Explorer → Properties → Details and the taskbar). -->
+    <Product>AI Translator</Product>
+    <AssemblyTitle>AI Translator</AssemblyTitle>
+    <Company>AI Translator</Company>
+    <Authors>AI Translator</Authors>
+    <Description>Grammarly-style inline translation in any text field on Windows.</Description>
+    <Version>1.0.0</Version>
     <!-- AllowUnsafeBlocks: required by the LibraryImport source generator (SYSLIB1062) used for the
          badge's window-style / SetWindowPos P/Invokes in Windows/NonActivatingWindow.cs & BadgeWindow. -->
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
@@ -15,6 +24,11 @@
          Release keeps the apphost for packaging + Authenticode signing (ADR-0006). -->
     <UseAppHost Condition="'$(Configuration)' == 'Debug'">false</UseAppHost>
   </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Embedded so WPF/tray can load it via pack URI (the exe icon is set by ApplicationIcon above). -->
+    <Resource Include="app.ico" />
+  </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\AiTranslator.Infrastructure\AiTranslator.Infrastructure.csproj" />
