@@ -612,12 +612,19 @@ public sealed class TargetResolver : ITargetResolver
             ? (((ValuePattern)v).Current.IsReadOnly ? "readonly" : "writable")
             : "none";
 
-    private static readonly string? LogPath =
-        string.Equals(Environment.GetEnvironmentVariable("AITR_FOCUS_LOG"), "0", StringComparison.Ordinal)
-            ? null
-            : (Environment.GetEnvironmentVariable("AITR_FOCUS_LOG") is { Length: > 0 } p && p != "1"
-                ? p
-                : Path.Combine(Path.GetTempPath(), "ai-translator-focus.log"));
+    private static readonly string? LogPath = ResolveLogPath();
+
+    private static string? ResolveLogPath()
+    {
+        // Opt-in diagnostics: AITR_FOCUS_LOG=1 → %TEMP%\ai-translator-focus.log, or set a full path. Off otherwise.
+        var v = Environment.GetEnvironmentVariable("AITR_FOCUS_LOG");
+        if (string.IsNullOrWhiteSpace(v) || v == "0")
+        {
+            return null;
+        }
+
+        return v == "1" ? Path.Combine(Path.GetTempPath(), "ai-translator-focus.log") : v;
+    }
 
     private static void Log(string message)
     {

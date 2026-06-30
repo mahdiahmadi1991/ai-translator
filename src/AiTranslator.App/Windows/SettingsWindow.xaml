@@ -3,46 +3,255 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:res="clr-namespace:AiTranslator.App.Resources"
         Title="{x:Static res:UiStrings.SettingsTitle}"
-        Width="500" Height="640" MinWidth="420" MinHeight="420"
+        Width="560" Height="660" MinWidth="480" MinHeight="520"
         WindowStartupLocation="CenterScreen"
-        Background="#FF1B1B1F"
+        Background="#FF16161A"
         TextOptions.TextFormattingMode="Ideal"
+        UseLayoutRounding="True"
         FontFamily="Segoe UI" FontSize="13">
 
     <Window.Resources>
-        <!-- Field label -->
+        <!-- Palette -->
+        <SolidColorBrush x:Key="Panel" Color="#FF1E1E24" />
+        <SolidColorBrush x:Key="PanelAlt" Color="#FF24242B" />
+        <SolidColorBrush x:Key="Stroke" Color="#FF2F2F38" />
+        <SolidColorBrush x:Key="TextPrimary" Color="#FFF1F1F4" />
+        <SolidColorBrush x:Key="TextMuted" Color="#FF93939E" />
+        <SolidColorBrush x:Key="Accent" Color="#FF2D7DF6" />
+        <SolidColorBrush x:Key="AccentHover" Color="#FF3A8AFF" />
+        <SolidColorBrush x:Key="SwitchOn" Color="#FF18A66B" />
+        <SolidColorBrush x:Key="SwitchOff" Color="#FF3C3C46" />
+        <SolidColorBrush x:Key="Danger" Color="#FFE0697A" />
+
+        <!-- Text -->
+        <Style x:Key="SectionTitle" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{StaticResource TextPrimary}" />
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Margin" Value="0,0,0,2" />
+        </Style>
         <Style x:Key="Label" TargetType="TextBlock">
-            <Setter Property="Foreground" Value="#FFCFCFD4" />
-            <Setter Property="FontSize" Value="12" />
-            <Setter Property="Margin" Value="0,0,0,4" />
+            <Setter Property="Foreground" Value="{StaticResource TextPrimary}" />
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="VerticalAlignment" Value="Center" />
         </Style>
         <Style x:Key="Hint" TargetType="TextBlock">
-            <Setter Property="Foreground" Value="#FF8A8A93" />
-            <Setter Property="FontSize" Value="11" />
+            <Setter Property="Foreground" Value="{StaticResource TextMuted}" />
+            <Setter Property="FontSize" Value="11.5" />
             <Setter Property="Margin" Value="0,3,0,0" />
             <Setter Property="TextWrapping" Value="Wrap" />
         </Style>
 
-        <!-- Dark, visible text input (own template so the app-wide theme can't hide it) -->
-        <Style x:Key="Field" TargetType="TextBox">
-            <Setter Property="Foreground" Value="#FFF2F2F4" />
-            <Setter Property="CaretBrush" Value="#FFF2F2F4" />
-            <Setter Property="Background" Value="#FF2A2A30" />
-            <Setter Property="BorderBrush" Value="#FF3C3C44" />
+        <!-- Card (groups settings, Grammarly-style rows) -->
+        <Style x:Key="Card" TargetType="Border">
+            <Setter Property="Background" Value="{StaticResource Panel}" />
+            <Setter Property="BorderBrush" Value="{StaticResource Stroke}" />
             <Setter Property="BorderThickness" Value="1" />
-            <Setter Property="Padding" Value="8,6" />
-            <Setter Property="FontSize" Value="13" />
+            <Setter Property="CornerRadius" Value="10" />
+            <Setter Property="Padding" Value="16,4" />
+            <Setter Property="Margin" Value="0,0,0,16" />
+        </Style>
+
+        <!-- Tabs -->
+        <Style x:Key="Tabs" TargetType="TabControl">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TabControl">
+                        <DockPanel>
+                            <Border DockPanel.Dock="Top" BorderBrush="{StaticResource Stroke}" BorderThickness="0,0,0,1">
+                                <TabPanel IsItemsHost="True" Margin="20,0,20,0" />
+                            </Border>
+                            <ContentPresenter ContentSource="SelectedContent" />
+                        </DockPanel>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="Tab" TargetType="TabItem">
+            <Setter Property="Foreground" Value="{StaticResource TextMuted}" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TabItem">
+                        <Border x:Name="b" Padding="2,12" Margin="0,0,26,0"
+                                BorderThickness="0,0,0,2" BorderBrush="Transparent"
+                                TextBlock.Foreground="{StaticResource TextMuted}">
+                            <ContentPresenter ContentSource="Header" TextBlock.FontSize="14"
+                                              TextBlock.FontWeight="SemiBold" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="b" Property="BorderBrush" Value="{StaticResource Accent}" />
+                                <Setter TargetName="b" Property="TextBlock.Foreground" Value="{StaticResource TextPrimary}" />
+                            </Trigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="b" Property="TextBlock.Foreground" Value="{StaticResource TextPrimary}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- iOS-style toggle switch (graphic only; labels are laid out beside it) -->
+        <Style x:Key="Switch" TargetType="CheckBox">
+            <Setter Property="Width" Value="44" />
+            <Setter Property="Height" Value="24" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="Focusable" Value="True" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="CheckBox">
+                        <Grid>
+                            <Border x:Name="off" CornerRadius="12" Background="{StaticResource SwitchOff}" />
+                            <Border x:Name="on" CornerRadius="12" Background="{StaticResource SwitchOn}" Opacity="0" />
+                            <Ellipse x:Name="thumb" Width="18" Height="18" Fill="White"
+                                     HorizontalAlignment="Left" Margin="3,0,0,0">
+                                <Ellipse.RenderTransform>
+                                    <TranslateTransform x:Name="tt" X="0" />
+                                </Ellipse.RenderTransform>
+                                <Ellipse.Effect>
+                                    <DropShadowEffect Color="#FF000000" BlurRadius="3" ShadowDepth="0.5" Opacity="0.35" />
+                                </Ellipse.Effect>
+                            </Ellipse>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <EventTrigger RoutedEvent="CheckBox.Checked">
+                                <BeginStoryboard>
+                                    <Storyboard>
+                                        <DoubleAnimation Storyboard.TargetName="tt" Storyboard.TargetProperty="X"
+                                                         To="20" Duration="0:0:0.16" />
+                                        <DoubleAnimation Storyboard.TargetName="on" Storyboard.TargetProperty="Opacity"
+                                                         To="1" Duration="0:0:0.16" />
+                                    </Storyboard>
+                                </BeginStoryboard>
+                            </EventTrigger>
+                            <EventTrigger RoutedEvent="CheckBox.Unchecked">
+                                <BeginStoryboard>
+                                    <Storyboard>
+                                        <DoubleAnimation Storyboard.TargetName="tt" Storyboard.TargetProperty="X"
+                                                         To="0" Duration="0:0:0.16" />
+                                        <DoubleAnimation Storyboard.TargetName="on" Storyboard.TargetProperty="Opacity"
+                                                         To="0" Duration="0:0:0.16" />
+                                    </Storyboard>
+                                </BeginStoryboard>
+                            </EventTrigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Dark dropdown -->
+        <Style x:Key="ComboItem" TargetType="ComboBoxItem">
+            <Setter Property="Foreground" Value="{StaticResource TextPrimary}" />
+            <Setter Property="Padding" Value="10,7" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ComboBoxItem">
+                        <Border x:Name="b" Background="Transparent" CornerRadius="6" Padding="{TemplateBinding Padding}">
+                            <ContentPresenter />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsHighlighted" Value="True">
+                                <Setter TargetName="b" Property="Background" Value="#FF33333C" />
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="b" Property="Background" Value="#FF2A4A86" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="Combo" TargetType="ComboBox">
+            <Setter Property="Foreground" Value="{StaticResource TextPrimary}" />
+            <Setter Property="Height" Value="38" />
+            <Setter Property="ItemContainerStyle" Value="{StaticResource ComboItem}" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ComboBox">
+                        <Grid>
+                            <ToggleButton Focusable="False" ClickMode="Press"
+                                          IsChecked="{Binding IsDropDownOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}">
+                                <ToggleButton.Template>
+                                    <ControlTemplate TargetType="ToggleButton">
+                                        <Border x:Name="bd" Background="{StaticResource PanelAlt}"
+                                                BorderBrush="{StaticResource Stroke}" BorderThickness="1" CornerRadius="8">
+                                            <Path x:Name="arrow" HorizontalAlignment="Right" VerticalAlignment="Center"
+                                                  Margin="0,0,12,0" Fill="{StaticResource TextMuted}"
+                                                  Data="M0,0 L8,0 L4,5 Z" />
+                                        </Border>
+                                        <ControlTemplate.Triggers>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter TargetName="bd" Property="BorderBrush" Value="#FF4A4A56" />
+                                            </Trigger>
+                                            <Trigger Property="IsChecked" Value="True">
+                                                <Setter TargetName="bd" Property="BorderBrush" Value="{StaticResource Accent}" />
+                                            </Trigger>
+                                        </ControlTemplate.Triggers>
+                                    </ControlTemplate>
+                                </ToggleButton.Template>
+                            </ToggleButton>
+                            <ContentPresenter Margin="12,0,30,0" VerticalAlignment="Center" IsHitTestVisible="False"
+                                              Content="{TemplateBinding SelectionBoxItem}"
+                                              ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}" />
+                            <Popup IsOpen="{TemplateBinding IsDropDownOpen}" Placement="Bottom"
+                                   AllowsTransparency="True" PopupAnimation="Slide" Focusable="False">
+                                <Border Background="{StaticResource PanelAlt}" BorderBrush="{StaticResource Stroke}"
+                                        BorderThickness="1" CornerRadius="8" Margin="0,4,0,8"
+                                        MinWidth="{Binding ActualWidth, RelativeSource={RelativeSource TemplatedParent}}"
+                                        MaxHeight="{TemplateBinding MaxDropDownHeight}">
+                                    <Border.Effect>
+                                        <DropShadowEffect Color="#FF000000" BlurRadius="14" ShadowDepth="3" Opacity="0.45" />
+                                    </Border.Effect>
+                                    <ScrollViewer Padding="4">
+                                        <ItemsPresenter />
+                                    </ScrollViewer>
+                                </Border>
+                            </Popup>
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Language dropdown item: flag + native name + muted code -->
+        <DataTemplate x:Key="LangItem">
+            <StackPanel Orientation="Horizontal">
+                <Border CornerRadius="3" SnapsToDevicePixels="True" Margin="0,0,10,0">
+                    <Image Source="{Binding Flag}" Width="22" Height="15" Stretch="Fill" />
+                </Border>
+                <TextBlock Text="{Binding Native}" Foreground="{StaticResource TextPrimary}" VerticalAlignment="Center" />
+                <TextBlock Text="{Binding CodeUpper}" Foreground="{StaticResource TextMuted}" FontSize="11"
+                           VerticalAlignment="Center" Margin="8,1,0,0" />
+            </StackPanel>
+        </DataTemplate>
+
+        <!-- Text inputs -->
+        <Style x:Key="Field" TargetType="TextBox">
+            <Setter Property="Foreground" Value="{StaticResource TextPrimary}" />
+            <Setter Property="CaretBrush" Value="{StaticResource TextPrimary}" />
+            <Setter Property="Background" Value="{StaticResource PanelAlt}" />
+            <Setter Property="BorderBrush" Value="{StaticResource Stroke}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Padding" Value="10,8" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="TextBox">
                         <Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
-                                BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="6">
+                                BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="8">
                             <ScrollViewer x:Name="PART_ContentHost" Margin="{TemplateBinding Padding}"
                                           VerticalScrollBarVisibility="{TemplateBinding VerticalScrollBarVisibility}" />
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsKeyboardFocused" Value="True">
-                                <Setter Property="BorderBrush" Value="#FF2D7DF6" />
+                                <Setter Property="BorderBrush" Value="{StaticResource Accent}" />
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -51,23 +260,23 @@
         </Style>
 
         <Style x:Key="Secret" TargetType="PasswordBox">
-            <Setter Property="Foreground" Value="#FFF2F2F4" />
-            <Setter Property="CaretBrush" Value="#FFF2F2F4" />
-            <Setter Property="Background" Value="#FF2A2A30" />
-            <Setter Property="BorderBrush" Value="#FF3C3C44" />
+            <Setter Property="Foreground" Value="{StaticResource TextPrimary}" />
+            <Setter Property="CaretBrush" Value="{StaticResource TextPrimary}" />
+            <Setter Property="Background" Value="{StaticResource PanelAlt}" />
+            <Setter Property="BorderBrush" Value="{StaticResource Stroke}" />
             <Setter Property="BorderThickness" Value="1" />
-            <Setter Property="Padding" Value="8,6" />
-            <Setter Property="FontSize" Value="13" />
+            <Setter Property="Padding" Value="10,8" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="PasswordBox">
                         <Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
-                                BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="6">
+                                BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="8">
                             <ScrollViewer x:Name="PART_ContentHost" Margin="{TemplateBinding Padding}" />
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsKeyboardFocused" Value="True">
-                                <Setter Property="BorderBrush" Value="#FF2D7DF6" />
+                                <Setter Property="BorderBrush" Value="{StaticResource Accent}" />
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -75,33 +284,76 @@
             </Setter>
         </Style>
 
-        <Style x:Key="Toggle" TargetType="CheckBox">
-            <Setter Property="Foreground" Value="#FFE6E6EA" />
-            <Setter Property="FontSize" Value="13" />
-            <Setter Property="Margin" Value="0,0,0,10" />
-        </Style>
-
+        <!-- Buttons -->
         <Style x:Key="Primary" TargetType="Button">
             <Setter Property="Foreground" Value="White" />
-            <Setter Property="Background" Value="#FF2D7DF6" />
+            <Setter Property="Background" Value="{StaticResource Accent}" />
             <Setter Property="FontSize" Value="13" />
             <Setter Property="FontWeight" Value="SemiBold" />
-            <Setter Property="Padding" Value="22,8" />
+            <Setter Property="Padding" Value="22,9" />
             <Setter Property="Cursor" Value="Hand" />
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
-                        <Border x:Name="bg" Background="{TemplateBinding Background}" CornerRadius="6"
+                        <Border x:Name="bg" Background="{TemplateBinding Background}" CornerRadius="8"
                                 Padding="{TemplateBinding Padding}">
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="bg" Property="Background" Value="#FF3A8AFF" />
+                                <Setter TargetName="bg" Property="Background" Value="{StaticResource AccentHover}" />
                             </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
-                                <Setter TargetName="bg" Property="Background" Value="#FF3A3A42" />
+                                <Setter TargetName="bg" Property="Background" Value="#FF34343C" />
                                 <Setter Property="Foreground" Value="#FF8A8A93" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Secondary / ghost button (Add, Show) -->
+        <Style x:Key="Ghost" TargetType="Button">
+            <Setter Property="Foreground" Value="{StaticResource TextPrimary}" />
+            <Setter Property="Background" Value="{StaticResource PanelAlt}" />
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="Padding" Value="16,8" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="bg" Background="{TemplateBinding Background}" CornerRadius="8"
+                                BorderBrush="{StaticResource Stroke}" BorderThickness="1"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="bg" Property="Background" Value="#FF30303A" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Link-style "Remove" used per block-list row -->
+        <Style x:Key="LinkDanger" TargetType="Button">
+            <Setter Property="Foreground" Value="{StaticResource Danger}" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="FontSize" Value="12.5" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Padding" Value="8,4" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="Transparent" Padding="{TemplateBinding Padding}">
+                            <TextBlock Text="{TemplateBinding Content}" TextDecorations="{x:Null}" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Foreground" Value="#FFFF8A99" />
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -111,58 +363,209 @@
     </Window.Resources>
 
     <DockPanel LastChildFill="True">
-        <!-- Always-visible footer with Save + status -->
-        <Border DockPanel.Dock="Bottom" Background="#FF161619" BorderBrush="#FF2A2A30" BorderThickness="0,1,0,0" Padding="20,12">
+        <!-- Header -->
+        <Border DockPanel.Dock="Top" Padding="20,18,20,12">
+            <StackPanel Orientation="Horizontal">
+                <Border Width="34" Height="34" CornerRadius="9" VerticalAlignment="Center">
+                    <Border.Background>
+                        <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                            <GradientStop Color="#FF4C95FF" Offset="0" />
+                            <GradientStop Color="#FF2C6BE0" Offset="1" />
+                        </LinearGradientBrush>
+                    </Border.Background>
+                    <TextBlock Text="⇄" Foreground="White" FontSize="18" FontWeight="Bold"
+                               HorizontalAlignment="Center" VerticalAlignment="Center" />
+                </Border>
+                <StackPanel Margin="12,0,0,0" VerticalAlignment="Center">
+                    <TextBlock Text="{x:Static res:UiStrings.AppName}" Foreground="{StaticResource TextPrimary}"
+                               FontSize="15" FontWeight="SemiBold" />
+                    <TextBlock Text="{x:Static res:UiStrings.SettingsHeading}" Foreground="{StaticResource TextMuted}"
+                               FontSize="12" />
+                </StackPanel>
+            </StackPanel>
+        </Border>
+
+        <!-- Footer: status + Save -->
+        <Border DockPanel.Dock="Bottom" Background="#FF131316" BorderBrush="{StaticResource Stroke}"
+                BorderThickness="0,1,0,0" Padding="20,12">
             <DockPanel LastChildFill="True">
                 <Button x:Name="SaveButton" DockPanel.Dock="Right" Style="{StaticResource Primary}"
                         Content="{x:Static res:UiStrings.SettingsSave}" Click="OnSaveClick" />
-                <TextBlock x:Name="StatusText" VerticalAlignment="Center" FontSize="12" Foreground="#FF8A8A93"
-                           TextWrapping="Wrap" Margin="0,0,12,0" />
+                <TextBlock x:Name="StatusText" VerticalAlignment="Center" FontSize="12"
+                           Foreground="{StaticResource TextMuted}" TextWrapping="Wrap" Margin="0,0,12,0" />
             </DockPanel>
         </Border>
 
-        <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="20,18">
-            <StackPanel>
-                <TextBlock Text="AI Translator" Foreground="White" FontSize="20" FontWeight="SemiBold" />
-                <TextBlock Text="Settings" Foreground="#FF8A8A93" FontSize="12" Margin="0,0,0,18" />
+        <!-- Tabs -->
+        <TabControl Style="{StaticResource Tabs}">
 
-                <TextBlock Style="{StaticResource Label}" Text="{x:Static res:UiStrings.SettingsApiKey}" />
-                <PasswordBox x:Name="ApiKeyBox" Style="{StaticResource Secret}" />
-                <TextBlock Style="{StaticResource Hint}" Text="Stored securely in Windows Credential Manager — not in any file." Margin="0,3,0,16" />
+            <!-- ================= GENERAL ================= -->
+            <TabItem Style="{StaticResource Tab}" Header="{x:Static res:UiStrings.SettingsTabGeneral}">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="20,18">
+                    <StackPanel>
+                        <!-- Languages -->
+                        <TextBlock Style="{StaticResource SectionTitle}" Text="{x:Static res:UiStrings.SettingsLanguages}" />
+                        <TextBlock Style="{StaticResource Hint}" Text="{x:Static res:UiStrings.SettingsLanguagesHint}" Margin="0,0,0,10" />
+                        <Border Style="{StaticResource Card}" Padding="16,16">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="44" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0">
+                                    <TextBlock Style="{StaticResource Hint}" Text="{x:Static res:UiStrings.SettingsPrimaryLang}" Margin="2,0,0,5" />
+                                    <ComboBox x:Name="PrimaryCombo" Style="{StaticResource Combo}"
+                                              ItemTemplate="{StaticResource LangItem}" MaxDropDownHeight="320" />
+                                </StackPanel>
+                                <TextBlock Grid.Column="1" Text="⇄" Foreground="{StaticResource TextMuted}" FontSize="16"
+                                           HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,8" />
+                                <StackPanel Grid.Column="2">
+                                    <TextBlock Style="{StaticResource Hint}" Text="{x:Static res:UiStrings.SettingsSecondaryLang}" Margin="2,0,0,5" />
+                                    <ComboBox x:Name="SecondaryCombo" Style="{StaticResource Combo}"
+                                              ItemTemplate="{StaticResource LangItem}" MaxDropDownHeight="320" />
+                                </StackPanel>
+                            </Grid>
+                        </Border>
 
-                <Grid Margin="0,0,0,16">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="14" />
-                        <ColumnDefinition Width="*" />
-                    </Grid.ColumnDefinitions>
-                    <StackPanel Grid.Column="0">
-                        <TextBlock Style="{StaticResource Label}" Text="{x:Static res:UiStrings.SettingsPrimaryLang}" />
-                        <TextBox x:Name="PrimaryBox" Style="{StaticResource Field}" />
+                        <!-- Behavior -->
+                        <TextBlock Style="{StaticResource SectionTitle}" Text="{x:Static res:UiStrings.SettingsBehavior}" />
+                        <Border Style="{StaticResource Card}" Margin="0,8,0,16">
+                            <StackPanel>
+                                <!-- Auto-direction -->
+                                <Grid Margin="0,12">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Grid.Column="0" Margin="0,0,12,0">
+                                        <TextBlock Style="{StaticResource Label}" Text="{x:Static res:UiStrings.SettingsAutoDirection}" />
+                                        <TextBlock Style="{StaticResource Hint}" Text="{x:Static res:UiStrings.SettingsAutoDirectionHint}" />
+                                    </StackPanel>
+                                    <CheckBox Grid.Column="1" x:Name="AutoDirectionBox" Style="{StaticResource Switch}" />
+                                </Grid>
+                                <Border Height="1" Background="{StaticResource Stroke}" />
+                                <!-- Auto-appear badge -->
+                                <Grid Margin="0,12">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Grid.Column="0" Margin="0,0,12,0">
+                                        <TextBlock Style="{StaticResource Label}" Text="{x:Static res:UiStrings.SettingsAutoAppearBadge}" />
+                                        <TextBlock Style="{StaticResource Hint}" Text="{x:Static res:UiStrings.SettingsAutoAppearBadgeHint}" />
+                                    </StackPanel>
+                                    <CheckBox Grid.Column="1" x:Name="AutoAppearBadgeBox" Style="{StaticResource Switch}" />
+                                </Grid>
+                                <Border Height="1" Background="{StaticResource Stroke}" />
+                                <!-- Run at startup -->
+                                <Grid Margin="0,12">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Grid.Column="0" Margin="0,0,12,0">
+                                        <TextBlock Style="{StaticResource Label}" Text="{x:Static res:UiStrings.SettingsRunAtStartup}" />
+                                        <TextBlock Style="{StaticResource Hint}" Text="{x:Static res:UiStrings.SettingsRunAtStartupHint}" />
+                                    </StackPanel>
+                                    <CheckBox Grid.Column="1" x:Name="RunAtStartupBox" Style="{StaticResource Switch}" />
+                                </Grid>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Model + hotkey -->
+                        <Border Style="{StaticResource Card}" Padding="16,16">
+                            <StackPanel>
+                                <TextBlock Style="{StaticResource Label}" Text="{x:Static res:UiStrings.SettingsModel}" Margin="0,0,0,6" />
+                                <TextBox x:Name="ModelBox" Style="{StaticResource Field}" />
+                                <TextBlock Style="{StaticResource Label}" Text="{x:Static res:UiStrings.SettingsHotkey}" Margin="0,16,0,6" />
+                                <TextBox x:Name="HotkeyBox" Style="{StaticResource Field}" />
+                                <TextBlock Style="{StaticResource Hint}" Text="{x:Static res:UiStrings.SettingsHotkeyHint}" />
+                                <TextBlock x:Name="HotkeyHint" Foreground="{StaticResource Danger}" FontSize="11.5" Margin="0,4,0,0" />
+                            </StackPanel>
+                        </Border>
                     </StackPanel>
-                    <StackPanel Grid.Column="2">
-                        <TextBlock Style="{StaticResource Label}" Text="{x:Static res:UiStrings.SettingsSecondaryLang}" />
-                        <TextBox x:Name="SecondaryBox" Style="{StaticResource Field}" />
+                </ScrollViewer>
+            </TabItem>
+
+            <!-- ================= ACCOUNT ================= -->
+            <TabItem Style="{StaticResource Tab}" Header="{x:Static res:UiStrings.SettingsTabAccount}">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="20,18">
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource SectionTitle}" Text="{x:Static res:UiStrings.SettingsApiKey}" />
+                        <TextBlock Style="{StaticResource Hint}" Text="{x:Static res:UiStrings.SettingsApiKeyHint}" Margin="0,0,0,10" />
+                        <Border Style="{StaticResource Card}" Padding="16,16">
+                            <StackPanel>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <Grid Grid.Column="0">
+                                        <PasswordBox x:Name="ApiKeyBox" Style="{StaticResource Secret}" />
+                                        <TextBox x:Name="ApiKeyReveal" Style="{StaticResource Field}" Visibility="Collapsed" />
+                                    </Grid>
+                                    <Button Grid.Column="1" x:Name="ShowKeyButton" Style="{StaticResource Ghost}"
+                                            Content="{x:Static res:UiStrings.SettingsApiKeyShow}" Margin="8,0,0,0"
+                                            Click="OnToggleRevealKey" />
+                                </Grid>
+                            </StackPanel>
+                        </Border>
                     </StackPanel>
-                </Grid>
+                </ScrollViewer>
+            </TabItem>
 
-                <TextBlock Style="{StaticResource Label}" Text="{x:Static res:UiStrings.SettingsModel}" />
-                <TextBox x:Name="ModelBox" Style="{StaticResource Field}" Margin="0,0,0,16" />
+            <!-- ================= BLOCK LIST ================= -->
+            <TabItem Style="{StaticResource Tab}" Header="{x:Static res:UiStrings.SettingsTabBlockList}">
+                <DockPanel Margin="20,18">
+                    <TextBlock DockPanel.Dock="Top" Style="{StaticResource Hint}"
+                               Text="{x:Static res:UiStrings.SettingsBlockListHint}" Margin="0,0,0,12" />
 
-                <TextBlock Style="{StaticResource Label}" Text="{x:Static res:UiStrings.SettingsHotkey}" />
-                <TextBox x:Name="HotkeyBox" Style="{StaticResource Field}" />
-                <TextBlock x:Name="HotkeyHint" Foreground="#FFE06C75" FontSize="11" Margin="0,4,0,16" />
+                    <!-- Add row -->
+                    <Grid DockPanel.Dock="Top" Margin="0,0,0,12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <Grid Grid.Column="0">
+                            <TextBox x:Name="BlocklistAddBox" Style="{StaticResource Field}" KeyDown="OnBlocklistAddKeyDown" />
+                            <TextBlock x:Name="BlocklistAddWatermark" IsHitTestVisible="False"
+                                       Foreground="{StaticResource TextMuted}" Margin="12,0,0,0" VerticalAlignment="Center"
+                                       Text="{x:Static res:UiStrings.SettingsBlockListAddPlaceholder}" />
+                        </Grid>
+                        <Button Grid.Column="1" Style="{StaticResource Ghost}" Margin="8,0,0,0"
+                                Content="{x:Static res:UiStrings.SettingsBlockListAdd}" Click="OnBlocklistAddClick" />
+                    </Grid>
 
-                <CheckBox x:Name="AutoDirectionBox" Style="{StaticResource Toggle}" Content="{x:Static res:UiStrings.SettingsAutoDirection}" />
-                <CheckBox x:Name="AutoAppearBadgeBox" Style="{StaticResource Toggle}" Content="{x:Static res:UiStrings.SettingsAutoAppearBadge}" />
-                <CheckBox x:Name="RunAtStartupBox" Style="{StaticResource Toggle}" Content="{x:Static res:UiStrings.SettingsRunAtStartup}" />
-
-                <TextBlock Style="{StaticResource Label}" Text="{x:Static res:UiStrings.SettingsBlocklist}" Margin="0,8,0,4" />
-                <TextBox x:Name="BlocklistBox" Style="{StaticResource Field}" AcceptsReturn="True" TextWrapping="NoWrap"
-                         Height="80" VerticalScrollBarVisibility="Auto" />
-                <TextBlock Style="{StaticResource Hint}"
-                           Text="The badge appears in every editable field — list apps here to suppress it." />
-            </StackPanel>
-        </ScrollViewer>
+                    <Border Style="{StaticResource Card}" Margin="0" Padding="6">
+                        <Grid>
+                            <TextBlock x:Name="BlocklistEmpty" Style="{StaticResource Hint}" Margin="10,14"
+                                       HorizontalAlignment="Center" Text="{x:Static res:UiStrings.SettingsBlockListEmpty}" />
+                            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                <ItemsControl x:Name="BlocklistItems">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Border Background="Transparent" CornerRadius="6" Margin="2,1" Padding="10,8">
+                                                <Grid>
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="Auto" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <TextBlock Grid.Column="0" Text="{Binding}" VerticalAlignment="Center"
+                                                               Foreground="{StaticResource TextPrimary}" TextTrimming="CharacterEllipsis" />
+                                                    <Button Grid.Column="1" Style="{StaticResource LinkDanger}" Tag="{Binding}"
+                                                            Content="{x:Static res:UiStrings.SettingsBlockListRemove}"
+                                                            Click="OnBlocklistRemoveClick" />
+                                                </Grid>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </ScrollViewer>
+                        </Grid>
+                    </Border>
+                </DockPanel>
+            </TabItem>
+        </TabControl>
     </DockPanel>
 </Window>
