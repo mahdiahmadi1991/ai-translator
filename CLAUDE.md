@@ -33,10 +33,8 @@ and streams an OpenAI translation **into the messenger's real input box**. Full 
 - **Build/run/test natively on Windows** (target `net10.0-windows`). You can — and must — verify
   every change here: run `dotnet build` / `dotnet test` and the manual acceptance test, and report
   the actual output. No "passes" claims without it.
-- **Offline NuGet:** the host network can't reach `nuget.org`. Packages are served from a git-ignored
-  `.nuget-packages/` fallback folder via `RestoreFallbackFolders` in `src/Directory.Build.props`.
-  If a package is missing, repopulate it from a networked machine — see
-  [docs/guides/offline-build.md](docs/guides/offline-build.md).
+- **NuGet:** standard online restore from `nuget.org` (pinned as the single source in
+  `src/nuget.config`; versions are centrally managed in `src/Directory.Packages.props`).
 - The app reads global focus and injects keystrokes; it cannot interact with windows running as
   Administrator unless it is elevated too (UIPI). See the security notes in the overview.
 

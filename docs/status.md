@@ -67,7 +67,6 @@ Deferred to **M3**: non-activating *overlay* + live-inject without focus flicker
 
 - **Build / test / run:** [guides/build-and-run.md](guides/build-and-run.md)
 - **Dev environment + OpenAI dev key:** [guides/development-setup.md](guides/development-setup.md)
-- **Offline NuGet:** [guides/offline-build.md](guides/offline-build.md)
 - **Source map + approved dependencies:** [reference/source-layout.md](reference/source-layout.md)
 - **Config schema:** [reference/configuration.md](reference/configuration.md) ·
   **models/pricing:** [reference/openai-models.md](reference/openai-models.md)

@@ -17,12 +17,11 @@ How to set up to build, run, and test on Windows. The `src/AiTranslator.slnx` so
 - Useful for debugging accessibility: **Accessibility Insights for Windows** / `Inspect.exe` to see
   how target apps expose their text fields.
 
-## Offline packages
+## Packages
 
-The host network can't reach `nuget.org`. Packages are served from a git-ignored `.nuget-packages/`
-fallback folder on disk (wired via `src/Directory.Build.props`), so restore/build works without
-network. Do not delete that folder; if a package is missing, repopulate it from a networked machine —
-see [offline-build.md](offline-build.md).
+Standard online restore from `nuget.org` — pinned as the single source in `src/nuget.config`, with
+versions managed centrally in `src/Directory.Packages.props`. `dotnet restore` (or the first build)
+pulls everything; no special setup.
 
 ## Dev OpenAI key
 

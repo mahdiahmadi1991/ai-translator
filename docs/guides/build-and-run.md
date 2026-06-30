@@ -4,9 +4,8 @@ Owner: Mehdi
 Status: Accepted
 Last reviewed: 2026-06-29
 
-> Commands run **on Windows** (PowerShell or a dev shell). Restore is **offline** — packages come
-> from the local `.nuget-packages/` fallback folder ([offline-build.md](offline-build.md)); no
-> `nuget.org` access is needed.
+> Commands run **on Windows** (PowerShell or a dev shell). Restore is a standard online restore from
+> `nuget.org` (pinned as the single source in `src/nuget.config`).
 
 ## Restore & build
 
