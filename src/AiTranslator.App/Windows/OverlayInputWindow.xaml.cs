@@ -161,23 +161,8 @@ public partial class OverlayInputWindow : Window
         Input.FlowDirection = rtl ? FlowDirection.RightToLeft : FlowDirection.LeftToRight;
 
         var dir = LanguageDirector.Resolve(text, settings.LanguagePair, settings.AutoDirection);
-        DirectionLabel.Text = $"{LangName(dir.SourceLang)}  →  {LangName(dir.TargetLang)}";
+        DirectionLabel.Text = $"{LanguageCatalog.DisplayName(dir.SourceLang)}  →  {LanguageCatalog.DisplayName(dir.TargetLang)}";
     }
-
-    private static string LangName(string code) => code.ToLowerInvariant() switch
-    {
-        "fa" => "Persian",
-        "en" => "English",
-        "ar" => "Arabic",
-        "fr" => "French",
-        "de" => "German",
-        "es" => "Spanish",
-        "ru" => "Russian",
-        "tr" => "Turkish",
-        "ur" => "Urdu",
-        "ps" => "Pashto",
-        _ => code.ToUpperInvariant(),
-    };
 
     private void PositionNearBottomCenter()
     {

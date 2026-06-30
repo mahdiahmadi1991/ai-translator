@@ -411,16 +411,14 @@ public sealed class FocusWatcher : IFocusWatcher
 
     private static string? ResolveDebugLogPath()
     {
-        // On by default while we debug per-app detection; AITR_FOCUS_LOG=0 turns it off, or set a path.
+        // Opt-in diagnostics: AITR_FOCUS_LOG=1 → %TEMP%\ai-translator-focus.log, or set a full path. Off otherwise.
         var v = Environment.GetEnvironmentVariable("AITR_FOCUS_LOG");
-        if (string.Equals(v, "0", StringComparison.Ordinal))
+        if (string.IsNullOrWhiteSpace(v) || string.Equals(v, "0", StringComparison.Ordinal))
         {
             return null;
         }
 
-        return !string.IsNullOrWhiteSpace(v) && v != "1"
-            ? v
-            : Path.Combine(Path.GetTempPath(), "ai-translator-focus.log");
+        return v == "1" ? Path.Combine(Path.GetTempPath(), "ai-translator-focus.log") : v;
     }
 
     private static void DebugLog(string message)

@@ -1,5 +1,9 @@
+using System.Collections.ObjectModel;
+using System.Linq;
 using System.Runtime.InteropServices;
 using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
 using AiTranslator.App.Resources;
@@ -18,6 +22,7 @@ public partial class SettingsWindow : Window
 
     private readonly ISettingsStore _settingsStore;
     private readonly ISecretStore _secretStore;
+    private readonly ObservableCollection<string> _blocklist = new();
     private AppSettings _current;
 
     /// <summary>Raised after a successful save with the new settings.</summary>
@@ -29,9 +34,18 @@ public partial class SettingsWindow : Window
         _settingsStore = settingsStore;
         _secretStore = secretStore;
         _current = settingsStore.Load();
+
+        PrimaryCombo.ItemsSource = LanguageCatalog.All;
+        SecondaryCombo.ItemsSource = LanguageCatalog.All;
+        BlocklistItems.ItemsSource = _blocklist;
+        _blocklist.CollectionChanged += (_, _) => UpdateBlocklistEmpty();
+        BlocklistAddBox.TextChanged += (_, _) => UpdateWatermark();
         HotkeyBox.TextChanged += (_, _) => ValidateHotkey();
+
         LoadIntoFields();
         ValidateHotkey();
+        UpdateBlocklistEmpty();
+        UpdateWatermark();
     }
 
     protected override void OnSourceInitialized(EventArgs e)
@@ -49,15 +63,25 @@ public partial class SettingsWindow : Window
     private void LoadIntoFields()
     {
         ApiKeyBox.Password = _secretStore.GetApiKey() ?? string.Empty;
-        PrimaryBox.Text = _current.LanguagePair.Primary;
-        SecondaryBox.Text = _current.LanguagePair.Secondary;
+        PrimaryCombo.SelectedItem = LanguageCatalog.Get(_current.LanguagePair.Primary);
+        SecondaryCombo.SelectedItem = LanguageCatalog.Get(_current.LanguagePair.Secondary);
         ModelBox.Text = _current.Model;
         HotkeyBox.Text = _current.Hotkey;
         AutoDirectionBox.IsChecked = _current.AutoDirection;
         AutoAppearBadgeBox.IsChecked = _current.AutoAppearBadge;
         RunAtStartupBox.IsChecked = _current.RunAtStartup;
-        BlocklistBox.Text = string.Join(Environment.NewLine, _current.Blocklist);
+
+        _blocklist.Clear();
+        foreach (var entry in _current.Blocklist)
+        {
+            _blocklist.Add(entry);
+        }
     }
+
+    // ---- General tab helpers ------------------------------------------------------------------
+
+    private static string SelectedCode(ComboBox combo, string fallback)
+        => combo.SelectedItem is LanguageOption option ? option.Code : fallback;
 
     /// <summary>Live-validate the hotkey: clear feedback + enable Save when parseable, else block Save.</summary>
     private void ValidateHotkey()
@@ -65,10 +89,90 @@ public partial class SettingsWindow : Window
         bool valid = HotkeyCombination.TryParse(HotkeyBox.Text.Trim(), out _);
         HotkeyHint.Text = valid ? string.Empty : UiStrings.SettingsHotkeyInvalid;
         SaveButton.IsEnabled = valid;
+
+        // Save lives in the footer (visible on every tab) but the hotkey field is on General — so mirror
+        // the reason there, otherwise switching tabs shows a disabled Save with no explanation.
+        if (!valid)
+        {
+            StatusText.Foreground = ErrBrush;
+            StatusText.Text = UiStrings.SettingsHotkeyInvalid;
+        }
+        else if (StatusText.Text == UiStrings.SettingsHotkeyInvalid)
+        {
+            StatusText.Text = string.Empty;   // clear only our own message, never a save result
+        }
     }
 
-    private static IReadOnlyList<string> ParseLines(string text)
-        => text.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+    // ---- Account tab: reveal / hide the key ---------------------------------------------------
+
+    private void OnToggleRevealKey(object sender, RoutedEventArgs e)
+    {
+        bool revealing = ApiKeyReveal.Visibility != Visibility.Visible;
+        if (revealing)
+        {
+            ApiKeyReveal.Text = ApiKeyBox.Password;
+            ApiKeyBox.Visibility = Visibility.Collapsed;
+            ApiKeyReveal.Visibility = Visibility.Visible;
+            ShowKeyButton.Content = "Hide";
+        }
+        else
+        {
+            ApiKeyBox.Password = ApiKeyReveal.Text;
+            ApiKeyReveal.Visibility = Visibility.Collapsed;
+            ApiKeyBox.Visibility = Visibility.Visible;
+            ShowKeyButton.Content = UiStrings.SettingsApiKeyShow;
+        }
+    }
+
+    private string CurrentApiKey()
+        => ApiKeyReveal.Visibility == Visibility.Visible ? ApiKeyReveal.Text : ApiKeyBox.Password;
+
+    // ---- Block List tab -----------------------------------------------------------------------
+
+    private void OnBlocklistAddClick(object sender, RoutedEventArgs e) => AddBlocklistEntry();
+
+    private void OnBlocklistAddKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Enter)
+        {
+            AddBlocklistEntry();
+            e.Handled = true;
+        }
+    }
+
+    private void AddBlocklistEntry()
+    {
+        string entry = BlocklistAddBox.Text.Trim();
+        if (entry.Length == 0)
+        {
+            return;
+        }
+
+        if (!_blocklist.Any(x => string.Equals(x, entry, StringComparison.OrdinalIgnoreCase)))
+        {
+            _blocklist.Add(entry);
+        }
+
+        BlocklistAddBox.Clear();
+        BlocklistAddBox.Focus();
+    }
+
+    private void OnBlocklistRemoveClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button { Tag: string entry })
+        {
+            _blocklist.Remove(entry);
+        }
+    }
+
+    private void UpdateBlocklistEmpty()
+        => BlocklistEmpty.Visibility = _blocklist.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+
+    private void UpdateWatermark()
+        => BlocklistAddWatermark.Visibility =
+            string.IsNullOrEmpty(BlocklistAddBox.Text) ? Visibility.Visible : Visibility.Collapsed;
+
+    // ---- Save ---------------------------------------------------------------------------------
 
     private void OnSaveClick(object sender, RoutedEventArgs e)
     {
@@ -80,13 +184,19 @@ public partial class SettingsWindow : Window
 
         var updated = _current with
         {
-            LanguagePair = new LanguagePair(PrimaryBox.Text.Trim(), SecondaryBox.Text.Trim()),
+            LanguagePair = new LanguagePair(
+                SelectedCode(PrimaryCombo, _current.LanguagePair.Primary),
+                SelectedCode(SecondaryCombo, _current.LanguagePair.Secondary)),
             Model = ModelBox.Text.Trim(),
             Hotkey = HotkeyBox.Text.Trim(),
             AutoDirection = AutoDirectionBox.IsChecked == true,
             AutoAppearBadge = AutoAppearBadgeBox.IsChecked == true,
             RunAtStartup = RunAtStartupBox.IsChecked == true,
-            Blocklist = ParseLines(BlocklistBox.Text),
+            Blocklist = _blocklist
+                .Select(s => s.Trim())
+                .Where(s => s.Length > 0)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList(),
         };
 
         // Persist + apply side effects defensively: the credential write and the HKCU Run-key write
@@ -96,10 +206,14 @@ public partial class SettingsWindow : Window
         {
             _settingsStore.Save(updated);
 
-            var key = ApiKeyBox.Password;
+            var key = CurrentApiKey();
             if (!string.IsNullOrWhiteSpace(key))
             {
                 _secretStore.SetApiKey(key);
+            }
+            else if (_secretStore.GetApiKey() is not null)
+            {
+                _secretStore.DeleteApiKey();   // clearing the field removes the stored key
             }
 
             StartupManager.Apply(updated.RunAtStartup);
