@@ -12,6 +12,8 @@ using AiTranslator.Infrastructure.Awareness;
 using AiTranslator.Infrastructure.Input;
 using H.NotifyIcon;
 using Microsoft.Extensions.DependencyInjection;
+using Velopack;
+using Velopack.Sources;
 
 namespace AiTranslator.App;
 
@@ -51,6 +53,40 @@ public partial class App : Application
         if (_secretStore.GetApiKey() is null)
         {
             OpenSettings();   // first run — capture the API key before use
+        }
+
+        _ = CheckForUpdatesAsync();   // background, best-effort (no-op when not installed via Velopack)
+    }
+
+    private const string UpdateRepoUrl = "https://github.com/mahdiahmadi1991/ai-translator";
+
+    /// <summary>
+    /// Check GitHub Releases for a newer version and stage it. Applied when the user next quits, so it
+    /// never interrupts. A no-op when running from source (not a Velopack install) or offline.
+    /// </summary>
+    private async Task CheckForUpdatesAsync()
+    {
+        try
+        {
+            var manager = new UpdateManager(new GithubSource(UpdateRepoUrl, accessToken: null, prerelease: false));
+            if (!manager.IsInstalled)
+            {
+                return;
+            }
+
+            var update = await manager.CheckForUpdatesAsync();
+            if (update is null)
+            {
+                return;
+            }
+
+            await manager.DownloadUpdatesAsync(update);
+            manager.WaitExitThenApplyUpdates(update, silent: false, restart: false);
+            _tray?.ShowNotification(title: UiStrings.AppName, message: UiStrings.UpdateReady);
+        }
+        catch
+        {
+            // Update checks are best-effort and must never disrupt the app.
         }
     }
 

@@ -7,6 +7,9 @@
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>app.ico</ApplicationIcon>
     <RootNamespace>AiTranslator.App</RootNamespace>
+    <!-- Velopack needs to run its install/update hooks before the WPF app starts, so we use an explicit
+         Program.Main (App.xaml becomes a Page, not the auto-generated entry point). -->
+    <StartupObject>AiTranslator.App.Program</StartupObject>
 
     <!-- Exe metadata (shown in Explorer → Properties → Details and the taskbar). -->
     <Product>AI Translator</Product>
@@ -30,6 +33,13 @@
     <Resource Include="app.ico" />
   </ItemGroup>
 
+  <!-- App.xaml is a Page (not ApplicationDefinition) so it does not generate a Main; Program.Main is
+       the entry point (StartupObject above) and runs the Velopack hook before the app. -->
+  <ItemGroup>
+    <ApplicationDefinition Remove="App.xaml" />
+    <Page Include="App.xaml" SubType="Designer" Generator="MSBuild:Compile" />
+  </ItemGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\AiTranslator.Infrastructure\AiTranslator.Infrastructure.csproj" />
     <ProjectReference Include="..\AiTranslator.Core\AiTranslator.Core.csproj" />
@@ -38,6 +48,7 @@
   <ItemGroup>
     <PackageReference Include="WPF-UI" />
     <PackageReference Include="H.NotifyIcon.Wpf" />
+    <PackageReference Include="Velopack" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
   </ItemGroup>
 
