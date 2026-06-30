@@ -80,37 +80,51 @@ public sealed class TargetResolver : ITargetResolver
     /// </summary>
     private FieldResolution TryResolveWebView(AutomationElement focusedRoot, nint foreground)
     {
-        var renderHwnds = FindChromiumWindows(foreground);
+        var childRenderers = FindChildChromium(foreground);
 
-        // Also consider the focused element's own native window — covers a plain (non-WinUI) Chromium
-        // host where FocusedElement returns the render root directly.
-        nint focusedHwnd = SafeNativeWindowHandle(focusedRoot);
-        if (focusedHwnd != 0 && !renderHwnds.Contains(focusedHwnd))
+        // If the foreground window hosts its OWN Chromium renderer (a normal browser window, Electron,
+        // or an in-process WebView2), the OS-wide focused element is authoritative for the active tab —
+        // and we already saw it is non-editable, so the user simply is not in a field. We must NOT drill
+        // here: DOM focus (HasKeyboardFocus) is "sticky" per tab/window, so drilling would surface a
+        // background tab's or another browser window's field (the Chrome → "Gemini prompt" false badge).
+        if (childRenderers.Exists(h => ClassOf(h) == "Chrome_RenderWidgetHostHWND"))
         {
-            renderHwnds.Insert(0, focusedHwnd);
-        }
-
-        if (renderHwnds.Count == 0)
-        {
-            Log("webview: no Chromium/native render windows found under foreground");
             return Describe(focusedRoot, "non-editable");
         }
 
-        foreach (nint h in renderHwnds)
+        // No in-window renderer → a WinUI 3 shell (WhatsApp) whose chat lives in a SEPARATE top-level
+        // msedgewebview2 window of the same process family, which OS focus cannot reach. Only here do we
+        // collect those related windows and drill for the keyboard-focused field.
+        var renderHwnds = childRenderers;
+        renderHwnds.AddRange(FindRelatedTopLevelChromium(foreground));
+        nint focusedHwnd = SafeNativeWindowHandle(focusedRoot);
+        if (focusedHwnd != 0)
         {
-            WakeOnce(h);
+            renderHwnds.Add(focusedHwnd);
         }
 
-        Log($"webview: renders=[{DescribeHwnds(renderHwnds)}]");
+        renderHwnds = DedupRenderFirst(renderHwnds);
+        if (renderHwnds.Count == 0)
+        {
+            return Describe(focusedRoot, "non-editable");
+        }
 
-        // Fast path: after waking, the OS-wide focus may now resolve into the Chromium contenteditable.
+        bool firstWake = false;
+        foreach (nint h in renderHwnds)
+        {
+            firstWake |= WakeOnce(h);
+        }
+
+        Log($"webview: firstWake={firstWake} renders=[{DescribeHwnds(renderHwnds)}]");
+
+        // After waking, the OS-wide focus may now resolve into the contenteditable.
         var osFocused = SafeFocusedElement();
         if (osFocused is not null && osFocused.Current.ProcessId != _ownProcessId && IsEditable(osFocused))
         {
             return Describe(osFocused, "woken-os-focus");
         }
 
-        // Fallback: drill into each render widget's own UIA subtree for the focused editable element.
+        // Drill each related render widget's subtree for the keyboard-focused editable element.
         foreach (nint h in renderHwnds)
         {
             var field = DrillFocusedEditable(h);
@@ -120,8 +134,9 @@ public sealed class TargetResolver : ITargetResolver
             }
         }
 
-        // Nothing editable yet. If a renderer is still within its post-wake grace window the tree is
-        // probably still building → ask the caller to retry; otherwise it is genuinely non-editable.
+        // Nothing editable yet. While a renderer is within its post-wake grace window the tree is
+        // probably still building → ask the caller to retry; otherwise it is genuinely non-editable
+        // (e.g. the WhatsApp message box lost DOM focus) → let the badge hide.
         return RecentlyWoken(renderHwnds)
             ? FieldResolution.Pending
             : Describe(focusedRoot, "non-editable");
@@ -205,7 +220,9 @@ public sealed class TargetResolver : ITargetResolver
 
     // --- Chromium window discovery + accessibility wake ----------------------------------------
 
-    private static List<nint> FindChromiumWindows(nint top)
+    /// <summary>Chromium windows parented INSIDE the foreground window (in-process WebView2 / Electron /
+    /// a normal browser window). EnumChildWindows recurses and crosses process boundaries.</summary>
+    private static List<nint> FindChildChromium(nint top)
     {
         var found = new List<nint>();
         if (top == 0)
@@ -213,64 +230,106 @@ public sealed class TargetResolver : ITargetResolver
             return found;
         }
 
-        bool Collect(nint h, nint _)
+        try
         {
-            if (ClassOf(h).StartsWith("Chrome_", StringComparison.Ordinal))
+            EnumChildWindows(top, (h, _) =>
             {
-                found.Add(h);
-            }
+                if (ClassOf(h).StartsWith("Chrome_", StringComparison.Ordinal))
+                {
+                    found.Add(h);
+                }
 
-            return true;
+                return true;
+            }, 0);
         }
+        catch { /* best-effort */ }
+
+        return found;
+    }
+
+    /// <summary>
+    /// SEPARATE top-level Chromium windows belonging to the foreground app's process family and laid
+    /// over its window — the "WhatsApp Business" case (a standalone msedgewebview2 window, not a child,
+    /// not owned, whose process descends from WhatsApp.Root.exe). The geometric overlap test keeps us
+    /// from grabbing a DIFFERENT background window of a multi-window browser.
+    /// </summary>
+    private static List<nint> FindRelatedTopLevelChromium(nint top)
+    {
+        var found = new List<nint>();
+        uint fgPid = PidOf(top);
+        if (fgPid == 0)
+        {
+            return found;
+        }
+
+        var family = ProcessFamily(fgPid);
+        RECT fgRect = RectOf(top);
 
         try
         {
-            // (a) Renderers parented inside the foreground window — the in-process WebView2 / Electron
-            //     case. EnumChildWindows recurses through all descendants, crossing process boundaries.
-            EnumChildWindows(top, Collect, 0);
-
-            // (b) Separate top-level WebView2 windows owned by the foreground app's PROCESS family. The
-            //     "WhatsApp Business" case: the chat is a standalone msedgewebview2 top-level window
-            //     (not a child window, not owned) whose process is a child of WhatsApp.Root.exe — so we
-            //     match by process ancestry, then drill its renderer for the keyboard-focused field.
-            uint fgPid = PidOf(top);
-            if (fgPid != 0)
+            EnumWindows((w, _) =>
             {
-                var family = ProcessFamily(fgPid);
-                EnumWindows((w, _) =>
+                if (w != top
+                    && IsWindowVisible(w)
+                    && ClassOf(w).StartsWith("Chrome_", StringComparison.Ordinal)
+                    && family.Contains(PidOf(w))
+                    && OverlapsMostly(RectOf(w), fgRect))
                 {
-                    if (w != top
-                        && IsWindowVisible(w)
-                        && ClassOf(w).StartsWith("Chrome_", StringComparison.Ordinal)
-                        && family.Contains(PidOf(w)))
+                    found.Add(w);
+                    EnumChildWindows(w, (h, _) =>
                     {
-                        found.Add(w);
-                        EnumChildWindows(w, Collect, 0);
-                    }
+                        if (ClassOf(h).StartsWith("Chrome_", StringComparison.Ordinal))
+                        {
+                            found.Add(h);
+                        }
 
-                    return true;
-                }, 0);
-            }
+                        return true;
+                    }, 0);
+                }
+
+                return true;
+            }, 0);
         }
-        catch { /* discovery is best-effort */ }
+        catch { /* best-effort */ }
 
-        // De-duplicate, renderers first (the actual wake/drill target; widget hosts are lower priority).
+        return found;
+    }
+
+    private static List<nint> DedupRenderFirst(List<nint> hwnds)
+    {
         var unique = new List<nint>();
         var seen = new HashSet<nint>();
-        foreach (nint h in found)
+        foreach (nint h in hwnds)
         {
-            if (seen.Add(h))
+            if (h != 0 && seen.Add(h))
             {
                 unique.Add(h);
             }
         }
 
+        // Renderers first — the actual drill target; widget hosts / placeholders are lower priority.
         unique.Sort((a, b) => RenderRank(ClassOf(a)).CompareTo(RenderRank(ClassOf(b))));
         return unique;
     }
 
     private static int RenderRank(string cls) =>
         cls == "Chrome_RenderWidgetHostHWND" ? 0 : 1;
+
+    /// <summary>True when at least half of window <paramref name="w"/> lies inside <paramref name="fg"/>
+    /// (the webview is visually hosted over the foreground app).</summary>
+    private static bool OverlapsMostly(RECT w, RECT fg)
+    {
+        long ix = Math.Max(0, Math.Min(w.right, fg.right) - Math.Max(w.left, fg.left));
+        long iy = Math.Max(0, Math.Min(w.bottom, fg.bottom) - Math.Max(w.top, fg.top));
+        long intersection = ix * iy;
+        long area = (long)Math.Max(1, w.right - w.left) * Math.Max(1, w.bottom - w.top);
+        return intersection * 2 >= area;
+    }
+
+    private static RECT RectOf(nint hwnd)
+    {
+        return GetWindowRect(hwnd, out RECT r) ? r : default;
+    }
 
     private static uint PidOf(nint hwnd)
     {
@@ -337,22 +396,29 @@ public sealed class TargetResolver : ITargetResolver
         return family;
     }
 
-    /// <summary>Wake a window's accessibility tree the first time we see it, recording when.</summary>
-    private void WakeOnce(nint hwnd)
+    /// <summary>Wake a window's accessibility tree the first time we see it, recording when (the
+    /// timestamp drives the post-wake grace window). Returns true if this was its first wake.</summary>
+    private bool WakeOnce(nint hwnd)
     {
         if (hwnd == 0)
         {
-            return;
+            return false;
         }
 
         bool first;
         lock (_wokenLock)
         {
             first = !_wokenAt.ContainsKey(hwnd);
-            _wokenAt[hwnd] = Environment.TickCount64;
-            if (_wokenAt.Count > 256)
+            if (first)
             {
-                PruneWoken();   // bound the cache; re-waking is cheap
+                if (_wokenAt.Count > 256)
+                {
+                    PruneWoken();   // bound the cache; re-waking is cheap
+                }
+
+                // Record only the FIRST wake: the grace window must measure time since the tree began
+                // building, not be refreshed on every resolve (which would keep the badge alive forever).
+                _wokenAt[hwnd] = Environment.TickCount64;
             }
         }
 
@@ -360,6 +426,8 @@ public sealed class TargetResolver : ITargetResolver
         {
             WakeAccessibility(hwnd);
         }
+
+        return first;
     }
 
     /// <summary>True while any of the given render windows is within its post-wake grace window.</summary>
@@ -459,6 +527,10 @@ public sealed class TargetResolver : ITargetResolver
     [DllImport("user32.dll")]
     private static extern uint GetWindowThreadProcessId(nint hWnd, out uint lpdwProcessId);
 
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool GetWindowRect(nint hWnd, out RECT lpRect);
+
     [DllImport("user32.dll", CharSet = CharSet.Unicode, EntryPoint = "GetClassNameW")]
     private static extern int GetClassName(nint hWnd, [Out] char[] lpClassName, int nMaxCount);
 
@@ -481,6 +553,15 @@ public sealed class TargetResolver : ITargetResolver
     [DllImport("kernel32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool CloseHandle(nint hObject);
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct RECT
+    {
+        public int left;
+        public int top;
+        public int right;
+        public int bottom;
+    }
 
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
     private struct PROCESSENTRY32

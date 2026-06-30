@@ -31,7 +31,7 @@ public sealed class FocusWatcher : IFocusWatcher
     private const int LocationDebounceMs = 80;           // coalesce LOCATIONCHANGE bursts
     private const int ResolveTimeoutMs = 600;            // ADR-0003: bounded UIA — room for the WebView2 drill
     private const int RetryDelayMs = 140;                // re-poll cadence while a woken WebView2 tree builds
-    private const int MaxResolveRetries = 8;             // ~1.1s of self-driven retries (no external event needed)
+    private const int MaxResolveRetries = 12;            // ~1.7s of self-driven retries (covers the wake grace)
 
     // Optional diagnostic trace: set AITR_FOCUS_LOG=1 (→ %TEMP%\ai-translator-focus.log) or to a path.
     private static readonly string? DebugLogPath = ResolveDebugLogPath();
