@@ -15,6 +15,7 @@ public static class UiStrings
 
     // Overlay
     public const string OverlayHint = "Type your text, then Translate (Ctrl+Enter) — it replaces the field";
+    public const string OverlayPlaceholder = "Type your text…";
     public const string OverlayTranslate = "Translate";
     public const string OverlayTranslating = "Translating…";
     public const string OverlayNoApiKey = "Set your OpenAI key in Settings first (tray → Settings).";
