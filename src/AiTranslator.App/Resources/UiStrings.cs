@@ -12,6 +12,7 @@ public static class UiStrings
     public const string TraySettings = "Settings…";
     public const string TrayExit = "Exit";
     public const string TrayTooltip = "AI Translator. Press your hotkey to translate.";
+    public const string UpdateReady = "An update is ready. It will install when you quit AI Translator.";
 
     // Overlay
     public const string OverlayHint = "Type your text, then press Translate (or Ctrl+Enter).";

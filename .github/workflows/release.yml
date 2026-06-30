@@ -1,0 +1,69 @@
+name: release
+
+# Every push to main (i.e. each merge into main) cuts a release: the version + CHANGELOG are derived
+# from Conventional Commits, then Velopack builds the installer and publishes it to GitHub Releases.
+# A release is produced only when there are releasable commits (feat/fix/…); a docs/chore-only merge
+# updates nothing.
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-main
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Test
+        run: dotnet test src/AiTranslator.slnx -c Release
+
+      - name: Version + changelog + tag (Conventional Commits)
+        id: changelog
+        uses: TriPSs/conventional-changelog-action@v5
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          output-file: 'CHANGELOG.md'
+          skip-version-file: 'true'
+          tag-prefix: 'v'
+          git-message: 'chore(release): {version} [skip ci]'
+
+      - name: Publish (self-contained, no .NET prerequisite for users)
+        if: ${{ steps.changelog.outputs.skipped == 'false' }}
+        run: >
+          dotnet publish src/AiTranslator.App/AiTranslator.App.csproj
+          -c Release -r win-x64 --self-contained true
+          -p:Version=${{ steps.changelog.outputs.version }}
+          -o publish
+
+      - name: Package + upload to GitHub Releases (Velopack)
+        if: ${{ steps.changelog.outputs.skipped == 'false' }}
+        run: |
+          dotnet tool install -g vpk
+          $vpk = Join-Path $env:USERPROFILE '.dotnet\tools\vpk.exe'
+          & $vpk pack `
+            --packId AiTranslator `
+            --packVersion ${{ steps.changelog.outputs.version }} `
+            --packDir publish `
+            --mainExe AiTranslator.App.exe `
+            --packTitle "AI Translator" `
+            --packAuthors "Mohammad Mahdi Ahmadi" `
+            --icon src/AiTranslator.App/app.ico
+          & $vpk upload github `
+            --repoUrl https://github.com/mahdiahmadi1991/ai-translator `
+            --publish `
+            --releaseName "${{ steps.changelog.outputs.tag }}" `
+            --tag "${{ steps.changelog.outputs.tag }}" `
+            --token ${{ secrets.GITHUB_TOKEN }}
