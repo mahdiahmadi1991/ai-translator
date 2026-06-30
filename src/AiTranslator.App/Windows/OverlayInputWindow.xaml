@@ -56,7 +56,11 @@
             <Border DockPanel.Dock="Bottom" Background="#0AFFFFFF" CornerRadius="0,0,10,10" Padding="10,8">
                 <DockPanel>
                     <ui:Button x:Name="TranslateButton" DockPanel.Dock="Right" Appearance="Primary"
-                               Click="OnTranslateClick" Content="{x:Static res:UiStrings.OverlayTranslate}" ToolTip="Ctrl+Enter" />
+                               Click="OnTranslateClick" Content="{x:Static res:UiStrings.OverlayTranslate}" ToolTip="Ctrl+Enter">
+                        <ui:Button.Icon>
+                            <ui:SymbolIcon Symbol="Translate24" />
+                        </ui:Button.Icon>
+                    </ui:Button>
                     <ui:TextBlock x:Name="Status" VerticalAlignment="Center" FontTypography="Caption"
                                   Foreground="{DynamicResource SystemFillColorCriticalBrush}"
                                   TextWrapping="Wrap" Visibility="Collapsed" Margin="0,0,10,0" />

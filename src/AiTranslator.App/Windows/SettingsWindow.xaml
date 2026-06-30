@@ -6,6 +6,7 @@
         Title="{x:Static res:UiStrings.SettingsTitle}"
         Width="560" Height="660" MinWidth="480" MinHeight="520"
         WindowStartupLocation="CenterScreen"
+        Icon="pack://application:,,,/app.ico"
         Background="{DynamicResource ApplicationBackgroundBrush}"
         Foreground="{DynamicResource TextFillColorPrimaryBrush}"
         TextOptions.TextFormattingMode="Ideal"
@@ -178,7 +179,11 @@
                         <ui:TextBox Grid.Column="0" x:Name="BlocklistAddBox" KeyDown="OnBlocklistAddKeyDown"
                                     PlaceholderText="{x:Static res:UiStrings.SettingsBlockListAddPlaceholder}" />
                         <ui:Button Grid.Column="1" Margin="8,0,0,0" Appearance="Primary" MinWidth="72"
-                                   Content="{x:Static res:UiStrings.SettingsBlockListAdd}" Click="OnBlocklistAddClick" />
+                                   Content="{x:Static res:UiStrings.SettingsBlockListAdd}" Click="OnBlocklistAddClick">
+                            <ui:Button.Icon>
+                                <ui:SymbolIcon Symbol="Add24" />
+                            </ui:Button.Icon>
+                        </ui:Button>
                     </Grid>
                     <ui:Card>
                         <Grid>
@@ -197,8 +202,12 @@
                                                 <ui:TextBlock Grid.Column="0" Text="{Binding}" VerticalAlignment="Center"
                                                               TextTrimming="CharacterEllipsis" />
                                                 <ui:Button Grid.Column="1" Appearance="Transparent" Padding="8,4" Tag="{Binding}"
-                                                           Content="{x:Static res:UiStrings.SettingsBlockListRemove}"
-                                                           Click="OnBlocklistRemoveClick" />
+                                                           ToolTip="{x:Static res:UiStrings.SettingsBlockListRemove}"
+                                                           Click="OnBlocklistRemoveClick">
+                                                    <ui:Button.Icon>
+                                                        <ui:SymbolIcon Symbol="Delete24" />
+                                                    </ui:Button.Icon>
+                                                </ui:Button>
                                             </Grid>
                                         </DataTemplate>
                                     </ItemsControl.ItemTemplate>
