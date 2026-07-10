@@ -28,23 +28,22 @@ public sealed class OpenAiTranslationService : ITranslationService
     public OpenAiTranslationService(Func<string?> apiKeyProvider) => _apiKeyProvider = apiKeyProvider;
 
     public async IAsyncEnumerable<string> TranslateStreamAsync(
-        string text, TranslationDirection direction, string model,
-        [EnumeratorCancellation] CancellationToken ct)
+        TranslationRequest request, [EnumeratorCancellation] CancellationToken ct)
     {
         var apiKey = _apiKeyProvider()
             ?? throw new InvalidOperationException("No OpenAI API key configured.");
 
-        var pair = new LanguagePair(direction.SourceLang, direction.TargetLang);
-        var systemPrompt = PromptBuilder.BuildSystemPrompt(pair);
+        var pair = new LanguagePair(request.Direction.SourceLang, request.Direction.TargetLang);
+        var systemPrompt = PromptBuilder.BuildSystemPrompt(pair, request.Style, request.Humanize);
 
         var client = new ResponsesClient(apiKey: apiKey);
         var options = new CreateResponseOptions
         {
-            Model = model,
+            Model = request.Model,
             StreamingEnabled = true,
             Instructions = systemPrompt,
         };
-        options.InputItems.Add(ResponseItem.CreateUserMessageItem(text));
+        options.InputItems.Add(ResponseItem.CreateUserMessageItem(request.Text));
 
         await foreach (var update in client.CreateResponseStreamingAsync(options, ct))
         {

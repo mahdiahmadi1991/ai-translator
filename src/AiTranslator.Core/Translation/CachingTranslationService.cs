@@ -42,15 +42,14 @@ public sealed class CachingTranslationService : ITranslationService
     }
 
     public async IAsyncEnumerable<string> TranslateStreamAsync(
-        string text, TranslationDirection direction, string model,
-        [EnumeratorCancellation] CancellationToken ct)
+        TranslationRequest request, [EnumeratorCancellation] CancellationToken ct)
     {
-        var key = BuildKey(text, direction, model);
+        var key = BuildKey(request);
 
         // Never key/cache empty input — just pass through.
         if (key.Text.Length == 0)
         {
-            await foreach (var chunk in _inner.TranslateStreamAsync(text, direction, model, ct).ConfigureAwait(false))
+            await foreach (var chunk in _inner.TranslateStreamAsync(request, ct).ConfigureAwait(false))
             {
                 yield return chunk;
             }
@@ -67,7 +66,7 @@ public sealed class CachingTranslationService : ITranslationService
 
         // MISS: stream through while accumulating, then store only on a clean, non-empty completion.
         var sb = new StringBuilder();
-        await foreach (var chunk in _inner.TranslateStreamAsync(text, direction, model, ct).ConfigureAwait(false))
+        await foreach (var chunk in _inner.TranslateStreamAsync(request, ct).ConfigureAwait(false))
         {
             sb.Append(chunk);
             yield return chunk;
@@ -81,8 +80,16 @@ public sealed class CachingTranslationService : ITranslationService
         }
     }
 
-    private static CacheKey BuildKey(string text, TranslationDirection direction, string model)
-        => new(text.Trim(), direction.SourceLang.ToLowerInvariant(), direction.TargetLang.ToLowerInvariant(), model);
+    // Style and Humanize are part of the key: different styles produce different results and must be
+    // cached independently (switching style is correctly a miss).
+    private static CacheKey BuildKey(TranslationRequest r)
+        => new(
+            r.Text.Trim(),
+            r.Direction.SourceLang.ToLowerInvariant(),
+            r.Direction.TargetLang.ToLowerInvariant(),
+            r.Model,
+            r.Style,
+            r.Humanize);
 
     private bool TryGet(CacheKey key, out string value)
     {
@@ -134,7 +141,8 @@ public sealed class CachingTranslationService : ITranslationService
         }
     }
 
-    private readonly record struct CacheKey(string Text, string SourceLang, string TargetLang, string Model);
+    private readonly record struct CacheKey(
+        string Text, string SourceLang, string TargetLang, string Model, TranslationStyle Style, bool Humanize);
 
     private sealed record Entry(CacheKey Key, string Value, DateTimeOffset ExpiresAt);
 }

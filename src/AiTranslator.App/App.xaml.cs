@@ -198,6 +198,13 @@ public partial class App : Application
             _services.GetRequiredService<ITextInjector>(),
             () => _settings);
         overlay.SettingsRequested += (_, _) => OpenSettings();
+        overlay.StyleChanged += style =>
+        {
+            // Persist the box's last-used rewrite style so it survives restarts (ADR-0007).
+            var updated = _settings with { RewriteStyle = style };
+            try { _settingsStore.Save(updated); } catch { /* a persist failure must not break translating */ }
+            _settings = updated;
+        };
         overlay.Closed += (_, _) =>
         {
             if (ReferenceEquals(_overlay, overlay))

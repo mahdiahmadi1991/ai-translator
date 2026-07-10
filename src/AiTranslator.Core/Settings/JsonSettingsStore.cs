@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using AiTranslator.Core.Abstractions;
 using AiTranslator.Core.Models;
 
@@ -15,6 +16,9 @@ public sealed class JsonSettingsStore : ISettingsStore
         WriteIndented = true,
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         PropertyNameCaseInsensitive = true,
+        // Enums (e.g. rewriteStyle) as readable names, so a hand-edited file is clear and the value
+        // survives any future reordering of the enum.
+        Converters = { new JsonStringEnumConverter() },
     };
     private readonly string _filePath;
 

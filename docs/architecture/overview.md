@@ -133,6 +133,11 @@ See [ADR-0002](decision-records/0002-translation-openai-responses-streaming.md) 
 - A strict system prompt returns **translation only** (no chatter), with the configured language
   pair injected and **auto-direction** detection. Plain text output (no JSON wrapping).
 - Default model is configurable; see the reference doc for current options and the live-verify note.
+- **Compose-mode rewrite styles + humanizer** ([ADR-0007](decision-records/0007-rewrite-styles-and-humanizer.md)):
+  a `TranslationRequest` carries the text, direction, model, an optional rewrite **style**
+  (Original/Professional/Formal/Friendly/Email/Concise/Expand), and a **humanize** flag. `PromptBuilder`
+  composes all three into one call; a short-lived LRU cache keys on style + humanize. Read mode (translate
+  a selection) always uses `Original`.
 
 ## 8. Cross-cutting concerns
 

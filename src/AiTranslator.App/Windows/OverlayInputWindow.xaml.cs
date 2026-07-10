@@ -30,6 +30,7 @@ public partial class OverlayInputWindow : Window
     private FocusTarget _target;
     private CancellationTokenSource? _inflight;
     private bool _busy;
+    private bool _loadingStyle;   // suppress StyleChanged while we set the combo programmatically
 
     public OverlayInputWindow(
         IFocusTargetProvider focus, ITranslationService translator, ITextInjector injector,
@@ -40,6 +41,9 @@ public partial class OverlayInputWindow : Window
         _translator = translator;
         _injector = injector;
         _settingsProvider = settingsProvider;
+
+        StyleCombo.ItemsSource = RewriteStyleCatalog.All;
+        StyleCombo.SelectionChanged += OnStyleChanged;
 
         PreviewKeyDown += (_, e) =>
         {
@@ -89,7 +93,18 @@ public partial class OverlayInputWindow : Window
     /// <summary>Raised when the user clicks the header settings gear.</summary>
     public event EventHandler? SettingsRequested;
 
+    /// <summary>Raised when the user picks a different rewrite style, so the host can persist it.</summary>
+    public event Action<TranslationStyle>? StyleChanged;
+
     private void OnSettingsClick(object sender, RoutedEventArgs e) => SettingsRequested?.Invoke(this, EventArgs.Empty);
+
+    private void OnStyleChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (!_loadingStyle && StyleCombo.SelectedItem is RewriteStyleOption option)
+        {
+            StyleChanged?.Invoke(option.Style);   // persisted by the host; used on the next translate
+        }
+    }
 
     private void OnCloseClick(object sender, RoutedEventArgs e) => Hide();   // close = hide; the draft is kept
 
@@ -128,6 +143,12 @@ public partial class OverlayInputWindow : Window
     private void ShowForCore(FocusTarget target, System.Drawing.Rectangle? anchor)
     {
         _target = target;
+
+        // Reflect the persisted style (without raising StyleChanged for this programmatic set).
+        _loadingStyle = true;
+        StyleCombo.SelectedItem = RewriteStyleCatalog.Get(_settingsProvider().RewriteStyle);
+        _loadingStyle = false;
+
         if (!IsVisible)
         {
             Show();
@@ -159,6 +180,10 @@ public partial class OverlayInputWindow : Window
             ? LanguageDirector.IsRightToLeftLanguage(settings.LanguagePair.Primary)
             : LanguageDirector.IsRightToLeft(text);
         Input.FlowDirection = rtl ? FlowDirection.RightToLeft : FlowDirection.LeftToRight;
+
+        // Placeholder in the language/direction the user is expected to type in, so it never reads as
+        // English text stranded on the right of an RTL box.
+        Input.PlaceholderText = rtl ? UiStrings.OverlayPlaceholderRtl : UiStrings.OverlayPlaceholder;
 
         var dir = LanguageDirector.Resolve(text, settings.LanguagePair, settings.AutoDirection);
         DirectionLabel.Text = $"{LanguageCatalog.DisplayName(dir.SourceLang)}  →  {LanguageCatalog.DisplayName(dir.TargetLang)}";
@@ -218,10 +243,12 @@ public partial class OverlayInputWindow : Window
 
         var settings = _settingsProvider();
         var direction = LanguageDirector.Resolve(text, settings.LanguagePair, settings.AutoDirection);
+        var style = StyleCombo.SelectedItem is RewriteStyleOption o ? o.Style : settings.RewriteStyle;
+        var request = new TranslationRequest(text, direction, settings.Model, style, settings.HumanizeTranslations);
         var sb = new StringBuilder();
         try
         {
-            await foreach (var chunk in _translator.TranslateStreamAsync(text, direction, settings.Model, ct))
+            await foreach (var chunk in _translator.TranslateStreamAsync(request, ct))
             {
                 sb.Append(chunk);
             }

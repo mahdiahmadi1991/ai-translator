@@ -12,7 +12,17 @@
         Width="460"
         SizeToContent="Height"
         Foreground="{DynamicResource TextFillColorPrimaryBrush}"
-        FontFamily="Segoe UI Variable Text, Segoe UI">
+        FontFamily="Segoe UI Variable Text, Segoe UI, Tahoma">
+
+    <Window.Resources>
+        <!-- Rewrite-style dropdown item: icon + name -->
+        <DataTemplate x:Key="StyleItem">
+            <StackPanel Orientation="Horizontal">
+                <ui:SymbolIcon Symbol="{Binding Icon}" FontSize="16" Margin="0,0,8,0" VerticalAlignment="Center" />
+                <ui:TextBlock Text="{Binding Name}" VerticalAlignment="Center" />
+            </StackPanel>
+        </DataTemplate>
+    </Window.Resources>
 
     <!-- Opaque base: the themed card brush is translucent (meant to sit over a Mica backdrop), which
          left this stand-alone transparent window glassy and hard to read. Use a solid dark fill. -->
@@ -54,7 +64,9 @@
                 </DockPanel>
             </Border>
 
-            <!-- Footer: status (left) + Translate (right) — room for more later -->
+            <!-- Footer: rewrite-style picker (left) + spinner + Translate (right).
+                 NOTE ON DOCK ORDER: the footer is declared before the status row so the footer sits at
+                 the very bottom and the (normally-collapsed) status line appears just above it. -->
             <Border DockPanel.Dock="Bottom" Background="#0AFFFFFF" CornerRadius="0,0,10,10" Padding="10,8">
                 <DockPanel>
                     <ui:Button x:Name="TranslateButton" DockPanel.Dock="Right" Appearance="Primary"
@@ -66,10 +78,18 @@
                     <ui:ProgressRing x:Name="Busy" DockPanel.Dock="Right" Width="20" Height="20"
                                      Margin="0,0,10,0" VerticalAlignment="Center"
                                      IsIndeterminate="True" Visibility="Collapsed" />
-                    <ui:TextBlock x:Name="Status" VerticalAlignment="Center" FontTypography="Caption"
-                                  Foreground="{DynamicResource SystemFillColorCriticalBrush}"
-                                  TextWrapping="Wrap" Visibility="Collapsed" Margin="0,0,10,0" />
+                    <ComboBox x:Name="StyleCombo" DockPanel.Dock="Left" Width="172"
+                              ItemTemplate="{StaticResource StyleItem}" MaxDropDownHeight="340"
+                              ToolTip="{x:Static res:UiStrings.OverlayStyleLabel}"
+                              AutomationProperties.Name="{x:Static res:UiStrings.OverlayStyleLabel}" />
                 </DockPanel>
+            </Border>
+
+            <!-- Error/status line — collapsed unless a translation fails. Sits above the footer. -->
+            <Border DockPanel.Dock="Bottom" Background="Transparent" Padding="10,0,10,6">
+                <ui:TextBlock x:Name="Status" FontTypography="Caption"
+                              Foreground="{DynamicResource SystemFillColorCriticalBrush}"
+                              TextWrapping="Wrap" Visibility="Collapsed" />
             </Border>
 
             <!-- Body -->
