@@ -12,7 +12,7 @@
         Width="440"
         SizeToContent="Height"
         Foreground="{DynamicResource TextFillColorPrimaryBrush}"
-        FontFamily="Segoe UI Variable Text, Segoe UI">
+        FontFamily="Segoe UI Variable Text, Segoe UI, Tahoma">
 
     <Window.Resources>
         <DataTemplate x:Key="LangItem">
@@ -24,16 +24,21 @@
         </DataTemplate>
     </Window.Resources>
 
-    <Border CornerRadius="10" BorderThickness="1"
+    <!-- Margin leaves room for the drop shadow so the layered window doesn't clip it (as the badge does). -->
+    <Border CornerRadius="10" BorderThickness="1" Margin="12"
             Background="#FF1E1E22"
             BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}">
+        <Border.Effect>
+            <DropShadowEffect Color="#FF000000" BlurRadius="18" ShadowDepth="2" Opacity="0.45" />
+        </Border.Effect>
         <DockPanel>
             <!-- Header: logo + direction (left); close (right). Drag to move. -->
-            <Border DockPanel.Dock="Top" Background="#14FFFFFF" CornerRadius="10,10,0,0" Padding="10,6"
+            <Border DockPanel.Dock="Top" Background="#14FFFFFF" CornerRadius="9,9,0,0" Padding="10,6"
                     MouseLeftButtonDown="OnHeaderMouseDown" Cursor="SizeAll">
                 <DockPanel>
                     <ui:Button DockPanel.Dock="Right" Appearance="Transparent" Padding="6,4" Click="OnCloseClick"
-                               ToolTip="{x:Static res:UiStrings.OverlayClose}">
+                               ToolTip="{x:Static res:UiStrings.OverlayClose}"
+                               AutomationProperties.Name="{x:Static res:UiStrings.OverlayClose}">
                         <ui:Button.Icon>
                             <ui:SymbolIcon Symbol="Dismiss24" FontSize="16" />
                         </ui:Button.Icon>
@@ -54,36 +59,49 @@
                 </DockPanel>
             </Border>
 
-            <!-- Footer: target language (left) + spinner + copy (right) -->
-            <Border DockPanel.Dock="Bottom" Background="#0AFFFFFF" CornerRadius="0,0,10,10" Padding="10,8">
+            <!-- Footer: target language (left) + copy (right) -->
+            <Border DockPanel.Dock="Bottom" Background="#0AFFFFFF" CornerRadius="0,0,9,9" Padding="10,8">
                 <DockPanel>
                     <ui:Button x:Name="CopyButton" DockPanel.Dock="Right" Appearance="Secondary"
-                               Click="OnCopyClick" Content="{x:Static res:UiStrings.SelectionCopy}">
+                               Click="OnCopyClick" Content="{x:Static res:UiStrings.SelectionCopy}"
+                               AutomationProperties.Name="{x:Static res:UiStrings.SelectionCopyResult}">
                         <ui:Button.Icon>
-                            <ui:SymbolIcon Symbol="Copy24" />
+                            <ui:SymbolIcon x:Name="CopyIcon" Symbol="Copy24" />
                         </ui:Button.Icon>
                     </ui:Button>
-                    <ui:ProgressRing x:Name="Busy" DockPanel.Dock="Right" Width="18" Height="18"
-                                     Margin="0,0,10,0" VerticalAlignment="Center"
-                                     IsIndeterminate="True" Visibility="Collapsed" />
-                    <ComboBox x:Name="TargetCombo" DockPanel.Dock="Left" Width="150"
+                    <ComboBox x:Name="TargetCombo" DockPanel.Dock="Left" Width="160"
                               ItemTemplate="{StaticResource LangItem}" MaxDropDownHeight="300"
-                              ToolTip="{x:Static res:UiStrings.SelectionTargetLang}" />
+                              ToolTip="{x:Static res:UiStrings.SelectionTargetLang}"
+                              AutomationProperties.Name="{x:Static res:UiStrings.SelectionTargetLang}" />
                 </DockPanel>
             </Border>
 
-            <!-- Body: the translation (read-only, selectable) -->
-            <TextBox x:Name="Output"
-                     IsReadOnly="True"
-                     TextWrapping="Wrap"
-                     BorderThickness="0"
-                     Background="Transparent"
-                     Foreground="{DynamicResource TextFillColorPrimaryBrush}"
-                     FontSize="15"
-                     MaxHeight="240"
-                     MinHeight="60"
-                     Margin="8,8"
-                     VerticalScrollBarVisibility="Auto" />
+            <!-- Body: the translation (read-only, selectable), with in-place busy / error states. -->
+            <Grid Margin="10,8" MinHeight="60">
+                <TextBox x:Name="Output"
+                         IsReadOnly="True"
+                         TextWrapping="Wrap"
+                         BorderThickness="0"
+                         Background="Transparent"
+                         Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                         FontSize="16"
+                         MaxHeight="240"
+                         Margin="0"
+                         VerticalScrollBarVisibility="Auto" />
+
+                <!-- Shown only while streaming hasn't produced text yet -->
+                <StackPanel x:Name="BusyOverlay" Orientation="Horizontal" Visibility="Collapsed"
+                            HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <ui:ProgressRing Width="20" Height="20" IsIndeterminate="True" Margin="0,0,8,0" />
+                    <ui:TextBlock Text="{x:Static res:UiStrings.SelectionTranslating}" VerticalAlignment="Center"
+                                  Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                </StackPanel>
+
+                <!-- Errors / empty results — kept neutral (LTR) so it never inherits the RTL body direction -->
+                <ui:TextBlock x:Name="StatusText" Visibility="Collapsed" TextWrapping="Wrap"
+                              HorizontalAlignment="Center" VerticalAlignment="Center" TextAlignment="Center"
+                              Margin="6" Foreground="{DynamicResource SystemFillColorCriticalBrush}" />
+            </Grid>
         </DockPanel>
     </Border>
 </Window>

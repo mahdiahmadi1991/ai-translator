@@ -10,6 +10,7 @@ using AiTranslator.Core.Models;
 using Windows.Win32;
 using Windows.Win32.Foundation;
 using Windows.Win32.System.Threading;
+using Point = System.Drawing.Point;   // disambiguate from System.Windows.Point (this file uses both namespaces)
 
 namespace AiTranslator.Infrastructure.Awareness;
 
@@ -24,9 +25,11 @@ namespace AiTranslator.Infrastructure.Awareness;
 public sealed class SelectionWatcher : ISelectionWatcher
 {
     private const int WH_MOUSE_LL = 14;
+    private const int WM_LBUTTONDOWN = 0x0201;
     private const int WM_LBUTTONUP = 0x0202;
     private const int DebounceMs = 180;         // let the selection settle after the mouse is released
-    private const int ResolveTimeoutMs = 400;   // never block indefinitely on cross-process UIA
+    private const int ResolveTimeoutMs = 1000;  // budget for UIA read + (best-effort) clipboard fallback
+    private const int DragThresholdPx = 4;      // a press-move-release this far counts as a text selection
     private const int MaxChars = 5000;          // cap what we read/translate
 
     private readonly Func<AppSettings> _settingsProvider;
@@ -40,6 +43,11 @@ public sealed class SelectionWatcher : ISelectionWatcher
     private nint _hook;
     private int _generation;
     private bool _hadSelection;
+
+    // Gesture tracking (written and read on the hook/pump thread only — no locking needed).
+    private Point _downPoint;
+    private Point _upPoint;
+    private bool _gestureWasSelection;   // last left-button-up completed a drag (a deliberate selection)
 
     public SelectionWatcher(Func<AppSettings> settingsProvider) => _settingsProvider = settingsProvider;
 
@@ -90,6 +98,7 @@ public sealed class SelectionWatcher : ISelectionWatcher
         _debounce.Tick += OnDebounceTick;
 
         _hook = SetWindowsHookExW(WH_MOUSE_LL, _proc, GetModuleHandleW(null), 0);
+        Log(_hook != 0 ? $"hook installed: 0x{_hook:X}" : $"hook install FAILED (err={Marshal.GetLastWin32Error()})");
         _ready.Set();
 
         Dispatcher.Run();
@@ -107,10 +116,24 @@ public sealed class SelectionWatcher : ISelectionWatcher
         // Invoked on the pump thread for every mouse event system-wide — must be fast and never throw.
         try
         {
-            if (nCode >= 0 && (int)wParam == WM_LBUTTONUP)
+            if (nCode >= 0)
             {
-                _debounce!.Stop();
-                _debounce.Start();   // coalesce; read the selection once the drag has settled
+                switch ((int)wParam)
+                {
+                    case WM_LBUTTONDOWN:
+                        _downPoint = ReadPoint(lParam);
+                        break;
+
+                    case WM_LBUTTONUP:
+                        _upPoint = ReadPoint(lParam);
+                        _gestureWasSelection =
+                            Math.Abs(_upPoint.X - _downPoint.X) >= DragThresholdPx ||
+                            Math.Abs(_upPoint.Y - _downPoint.Y) >= DragThresholdPx;
+                        Log($"mouse-up drag={_gestureWasSelection} at {_upPoint.X},{_upPoint.Y}");
+                        _debounce!.Stop();
+                        _debounce.Start();   // coalesce; read the selection once the drag has settled
+                        break;
+                }
             }
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
@@ -125,9 +148,16 @@ public sealed class SelectionWatcher : ISelectionWatcher
     {
         _debounce!.Stop();
         int generation = ++_generation;
+
+        // Snapshot the gesture on the pump thread. A drag is a deliberate selection, so the auto path
+        // may fall back to a clipboard copy (accessibility exposes no selection in Chromium apps like
+        // Teams/WhatsApp); a plain click never copies. The drop point anchors the icon.
+        bool allowClipboard = _gestureWasSelection;
+        Point anchor = _upPoint;
+
         _ = Task.Run(() =>
         {
-            SelectedText? selection = ReadWithTimeout(allowClipboard: false);
+            SelectedText? selection = ReadWithTimeout(allowClipboard, anchor);
             _dispatcher?.InvokeAsync(() =>
             {
                 if (generation != _generation)
@@ -149,14 +179,15 @@ public sealed class SelectionWatcher : ISelectionWatcher
         });
     }
 
-    /// <summary>Hotkey path: read on the calling (UI) thread, with a clipboard-copy fallback.</summary>
-    public SelectedText? CaptureCurrentSelection() => ReadSelection(allowClipboard: true);
+    /// <summary>Hotkey path: read on the calling (UI) thread, with a clipboard-copy fallback. The icon
+    /// (if shown) anchors at the cursor since there is no drag drop-point here.</summary>
+    public SelectedText? CaptureCurrentSelection() => ReadSelection(allowClipboard: true, CursorPoint());
 
-    private SelectedText? ReadWithTimeout(bool allowClipboard)
+    private SelectedText? ReadWithTimeout(bool allowClipboard, Point anchor)
     {
         try
         {
-            var task = Task.Run(() => ReadSelection(allowClipboard));
+            var task = Task.Run(() => ReadSelection(allowClipboard, anchor));
             return task.Wait(ResolveTimeoutMs) ? task.Result : null;
         }
         catch
@@ -165,7 +196,7 @@ public sealed class SelectionWatcher : ISelectionWatcher
         }
     }
 
-    private SelectedText? ReadSelection(bool allowClipboard)
+    private SelectedText? ReadSelection(bool allowClipboard, Point anchor)
     {
         try
         {
@@ -189,30 +220,54 @@ public sealed class SelectionWatcher : ISelectionWatcher
             }
 
             string exeName = System.IO.Path.GetFileName(exePath);
+            Log($"read: exe='{exeName}' allowClipboard={allowClipboard}");
 
             var focused = AutomationElement.FocusedElement;
-            if (focused is not null && focused.Current.ProcessId != _ownProcessId
-                && focused.TryGetCurrentPattern(TextPattern.Pattern, out var pattern))
+            if (focused is null || focused.Current.ProcessId == _ownProcessId)
             {
-                var ranges = ((TextPattern)pattern).GetSelection();
-                if (ranges is { Length: > 0 })
+                Log("  focused: <null or own process>");
+            }
+            else
+            {
+                bool hasText = focused.TryGetCurrentPattern(TextPattern.Pattern, out var pattern);
+                Log($"  focused: {Snapshot(focused)} textPattern={hasText}");
+                if (hasText)
                 {
-                    string text = SafeGetText(ranges[0]);
-                    if (!string.IsNullOrWhiteSpace(text))
+                    var ranges = ((TextPattern)pattern).GetSelection();
+                    Log($"  selection: ranges={ranges?.Length ?? 0}");
+                    if (ranges is { Length: > 0 })
                     {
+                        string text = SafeGetText(ranges[0]);
                         Rectangle? bounds = UnionRects(SafeGetRects(ranges[0]));
-                        return new SelectedText(text.Trim(), bounds, (nint)fg, exeName, IsEditable(focused));
+                        Log($"  selection text len={text.Length} bounds={bounds?.ToString() ?? "null"}");
+                        if (!string.IsNullOrWhiteSpace(text))
+                        {
+                            // Anchor on the drop point / cursor if UIA gives us no bounding rectangle,
+                            // so the icon always appears where the user finished selecting.
+                            Rectangle resolved = bounds ?? new Rectangle(anchor.X, anchor.Y, 1, 1);
+                            return new SelectedText(text.Trim(), resolved, (nint)fg, exeName, IsEditable(focused));
+                        }
                     }
                 }
             }
 
-            // No UIA selection. On the explicit hotkey path only, fall back to a clipboard copy.
+            // No UIA selection (typical for Chromium apps). If this came from a real drag selection
+            // (auto path) or the explicit hotkey, fall back to a Ctrl+C copy. Anchor the icon at the
+            // drop point / cursor since the clipboard gives us no on-screen bounds.
             if (allowClipboard)
             {
                 string? copied = CopySelectionViaClipboard();
+                Log($"  clipboard fallback: len={copied?.Length ?? 0}");
                 if (!string.IsNullOrWhiteSpace(copied))
                 {
-                    return new SelectedText(copied.Trim(), null, (nint)fg, exeName, false);
+                    string text = copied.Trim();
+                    if (text.Length > MaxChars)
+                    {
+                        text = text[..MaxChars];   // cap huge selections (whole-document Ctrl+C) like the UIA path
+                    }
+
+                    Rectangle anchorBounds = new(anchor.X, anchor.Y, 1, 1);
+                    return new SelectedText(text, anchorBounds, (nint)fg, exeName, false);
                 }
             }
 
@@ -281,24 +336,74 @@ public sealed class SelectionWatcher : ISelectionWatcher
         }
     }
 
-    // Send Ctrl+C, read what the app placed on the clipboard, then restore the previous clipboard text.
-    private static string? CopySelectionViaClipboard()
+    // Send Ctrl+C, read what the app copies, then restore the previous clipboard. Runs on a dedicated
+    // STA thread — the WPF Clipboard requires STA, and the auto path reads on an MTA thread-pool thread;
+    // this also keeps the mouse-hook pump thread from ever blocking on the clipboard.
+    private static string? CopySelectionViaClipboard() => RunSta(() =>
     {
-        string? previous = SafeGetClipboardText();
+        string? previous;
         try
         {
-            try { Clipboard.Clear(); } catch { }
+            // Don't risk clobbering a non-text clipboard (image / copied files) — bail if that's what's there.
+            if (!Clipboard.ContainsText() && (Clipboard.ContainsImage() || Clipboard.ContainsFileDropList()))
+            {
+                return null;
+            }
+
+            previous = Clipboard.ContainsText() ? Clipboard.GetText() : null;
+        }
+        catch { previous = null; }
+
+        try
+        {
             SendCtrlC();
-            Thread.Sleep(90);   // give the target app a moment to copy (explicit hotkey path only)
-            return SafeGetClipboardText();
+            for (int attempt = 0; attempt < 12; attempt++)   // poll up to ~360ms for the app to copy
+            {
+                Thread.Sleep(30);
+                string? current = SafeGetClipboardText();
+                if (!string.IsNullOrEmpty(current) && current != previous)
+                {
+                    return current;
+                }
+            }
+
+            return null;
         }
         finally
         {
             if (previous is not null)
             {
-                try { Clipboard.SetText(previous); } catch { }
+                try { Clipboard.SetText(previous); } catch { /* best effort */ }
             }
         }
+    });
+
+    // Run a clipboard operation on a short-lived STA thread and wait (bounded) for its result.
+    private static string? RunSta(Func<string?> func)
+    {
+        string? result = null;
+        var thread = new Thread(() => { try { result = func(); } catch { /* never throw across threads */ } })
+        {
+            IsBackground = true,
+        };
+        thread.SetApartmentState(ApartmentState.STA);
+        thread.Start();
+        thread.Join(1500);
+        return result;
+    }
+
+    private static Point ReadPoint(nint lParam)
+    {
+        // lParam points at MSLLHOOKSTRUCT; its first member is POINT { int x; int y; } in physical pixels.
+        try { return new Point(Marshal.ReadInt32(lParam, 0), Marshal.ReadInt32(lParam, 4)); }
+        catch { return Point.Empty; }
+    }
+
+    private static Point CursorPoint()
+    {
+        // System.Drawing.Point is laid out as { int X; int Y; }, matching Win32 POINT.
+        try { return GetCursorPos(out Point p) ? p : Point.Empty; }
+        catch { return Point.Empty; }
     }
 
     private static string? SafeGetClipboardText()
@@ -340,6 +445,42 @@ public sealed class SelectionWatcher : ISelectionWatcher
         }
     }
 
+    // --- diagnostics (OPT-IN: off unless AITR_SELECTION_LOG is set, so we never write window titles /
+    // selection metadata to %TEMP% in normal use. Set it to "1" for the default temp path, or a full path.) ---
+
+    private static readonly string? LogPath = ResolveLogPath();
+
+    private static string? ResolveLogPath()
+    {
+        var v = Environment.GetEnvironmentVariable("AITR_SELECTION_LOG");
+        if (string.IsNullOrWhiteSpace(v) || string.Equals(v, "0", StringComparison.Ordinal))
+        {
+            return null;   // disabled by default
+        }
+
+        return v == "1"
+            ? System.IO.Path.Combine(System.IO.Path.GetTempPath(), "ai-translator-selection.log")
+            : v;   // a caller-supplied path
+    }
+
+    private static void Log(string message)
+    {
+        if (LogPath is null)
+        {
+            return;
+        }
+
+        try { System.IO.File.AppendAllText(LogPath, $"{DateTime.Now:HH:mm:ss.fff} {message}{Environment.NewLine}"); }
+        catch { /* diagnostics must never throw */ }
+    }
+
+    private static string Snapshot(AutomationElement e)
+    {
+        string S(Func<string> f) { try { return f() ?? ""; } catch { return "<err>"; } }
+        return $"ControlType={S(() => e.Current.ControlType.ProgrammaticName)} Class='{S(() => e.Current.ClassName)}' " +
+               $"Name='{S(() => e.Current.Name)}' pid={S(() => e.Current.ProcessId.ToString())}";
+    }
+
     // --- P/Invoke (raw DllImport for the mouse hook; CsWin32 covers the process/window calls) ---
 
     private delegate nint LowLevelMouseProc(int nCode, nint wParam, nint lParam);
@@ -359,4 +500,8 @@ public sealed class SelectionWatcher : ISelectionWatcher
 
     [DllImport("user32.dll")]
     private static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, nint dwExtraInfo);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool GetCursorPos(out Point lpPoint);
 }

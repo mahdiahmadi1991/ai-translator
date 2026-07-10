@@ -69,6 +69,9 @@ public static class LanguageCatalog
 
     /// <summary>English display name for a code (used by the overlay's direction label).</summary>
     public static string DisplayName(string code) => Get(code).English;
+
+    /// <summary>Native display name for a code (e.g. "فارسی"), matching the language picker.</summary>
+    public static string NativeName(string code) => Get(code).Native;
 }
 
 /// <summary>Tiny vector flags (24×16, rounded) built once and frozen. Approximations, not heraldry.</summary>

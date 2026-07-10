@@ -1,5 +1,6 @@
 using AiTranslator.Core.Abstractions;
 using AiTranslator.Core.Settings;
+using AiTranslator.Core.Translation;
 using AiTranslator.Infrastructure.Awareness;
 using AiTranslator.Infrastructure.Input;
 using AiTranslator.Infrastructure.Secrets;
@@ -20,8 +21,11 @@ public static class ServiceConfiguration
         services.AddSingleton<IFocusTargetProvider, ForegroundFocusTargetProvider>();
         services.AddSingleton<ITargetResolver, TargetResolver>();
         services.AddSingleton<ITextInjector, ClipboardTextInjector>();
+        // Short-lived cache decorator: re-selecting the same text renders instantly and skips the API.
+        // OpenAiTranslationService is left untouched — the cache wraps it transparently.
         services.AddSingleton<ITranslationService>(sp =>
-            new OpenAiTranslationService(() => sp.GetRequiredService<ISecretStore>().GetApiKey()));
+            new CachingTranslationService(
+                new OpenAiTranslationService(() => sp.GetRequiredService<ISecretStore>().GetApiKey())));
 
         return services.BuildServiceProvider();
     }
