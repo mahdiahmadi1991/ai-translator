@@ -1,0 +1,24 @@
+<Project>
+  <!--
+    Central package versions (CPM). Versions live ONLY here; csproj PackageReferences are versionless.
+    Test deps are pinned and restore everywhere. The Windows-only deps below were pinned to versions
+    verified to exist on nuget.org (queried 2026-06-29); they restore on the first Windows build.
+    Meziantou is held at 1.1.0 (classic CredentialManager API used by the code) — 2.x exists but its
+    API must be verified before bumping.
+  -->
+  <ItemGroup>
+    <PackageVersion Include="coverlet.collector" Version="6.0.4" />
+    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageVersion Include="xunit" Version="2.9.3" />
+    <PackageVersion Include="xunit.runner.visualstudio" Version="3.1.4" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageVersion Include="OpenAI" Version="2.11.0" />
+    <PackageVersion Include="Meziantou.Framework.Win32.CredentialManager" Version="1.1.0" />
+    <PackageVersion Include="Microsoft.Windows.CsWin32" Version="0.3.298" />
+    <PackageVersion Include="WPF-UI" Version="4.3.0" />
+    <PackageVersion Include="H.NotifyIcon.Wpf" Version="2.4.1" />
+    <PackageVersion Include="Velopack" Version="1.2.0" />
+    <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="10.0.9" />
+  </ItemGroup>
+</Project>

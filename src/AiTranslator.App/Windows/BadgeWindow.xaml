@@ -1,0 +1,63 @@
+<windows:NonActivatingWindow x:Class="AiTranslator.App.Windows.BadgeWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:windows="clr-namespace:AiTranslator.App.Windows"
+        xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+        xmlns:res="clr-namespace:AiTranslator.App.Resources"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="Transparent"
+        SizeToContent="WidthAndHeight">
+    <!-- Margin leaves room for the drop shadow so it isn't clipped by the layered window. -->
+    <Border x:Name="Root" Width="30" Height="30" Margin="6" CornerRadius="15" Cursor="Hand" Opacity="0.5"
+            ToolTip="{x:Static res:UiStrings.BadgeTooltip}" RenderTransformOrigin="0.5,0.5">
+        <Border.Background>
+            <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                <GradientStop Color="#FF4C95FF" Offset="0" />
+                <GradientStop Color="#FF2C6BE0" Offset="1" />
+            </LinearGradientBrush>
+        </Border.Background>
+        <Border.Effect>
+            <DropShadowEffect Color="#FF0A1A33" BlurRadius="8" ShadowDepth="1.5" Opacity="0.5" />
+        </Border.Effect>
+        <Border.RenderTransform>
+            <ScaleTransform x:Name="HoverScale" ScaleX="1" ScaleY="1" />
+        </Border.RenderTransform>
+        <Border.ContextMenu>
+            <ContextMenu>
+                <MenuItem x:Name="IgnoreItem" Click="OnIgnoreClick" />
+                <Separator />
+                <MenuItem Header="{x:Static res:UiStrings.BadgeSettings}" Click="OnSettingsMenuClick" />
+                <MenuItem Header="{x:Static res:UiStrings.BadgeQuit}" Click="OnQuitClick" />
+            </ContextMenu>
+        </Border.ContextMenu>
+        <ui:SymbolIcon Symbol="ArrowSwap24" Foreground="White" FontSize="16"
+                       HorizontalAlignment="Center" VerticalAlignment="Center" />
+        <Border.Triggers>
+            <EventTrigger RoutedEvent="MouseEnter">
+                <BeginStoryboard>
+                    <Storyboard>
+                        <DoubleAnimation Storyboard.TargetName="HoverScale" Storyboard.TargetProperty="ScaleX"
+                                         To="1.12" Duration="0:0:0.12" />
+                        <DoubleAnimation Storyboard.TargetName="HoverScale" Storyboard.TargetProperty="ScaleY"
+                                         To="1.12" Duration="0:0:0.12" />
+                        <DoubleAnimation Storyboard.TargetName="Root" Storyboard.TargetProperty="Opacity"
+                                         To="1" Duration="0:0:0.12" />
+                    </Storyboard>
+                </BeginStoryboard>
+            </EventTrigger>
+            <EventTrigger RoutedEvent="MouseLeave">
+                <BeginStoryboard>
+                    <Storyboard>
+                        <DoubleAnimation Storyboard.TargetName="HoverScale" Storyboard.TargetProperty="ScaleX"
+                                         To="1" Duration="0:0:0.12" />
+                        <DoubleAnimation Storyboard.TargetName="HoverScale" Storyboard.TargetProperty="ScaleY"
+                                         To="1" Duration="0:0:0.12" />
+                        <DoubleAnimation Storyboard.TargetName="Root" Storyboard.TargetProperty="Opacity"
+                                         To="0.5" Duration="0:0:0.18" />
+                    </Storyboard>
+                </BeginStoryboard>
+            </EventTrigger>
+        </Border.Triggers>
+    </Border>
+</windows:NonActivatingWindow>

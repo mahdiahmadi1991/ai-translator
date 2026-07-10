@@ -1,0 +1,25 @@
+RegisterHotKey
+UnregisterHotKey
+GetForegroundWindow
+SetForegroundWindow
+GetWindowThreadProcessId
+AttachThreadInput
+SendInput
+GetClipboardSequenceNumber
+HOT_KEY_MODIFIERS
+VIRTUAL_KEY
+INPUT
+KEYBDINPUT
+
+// M2 awareness: WinEvent focus/foreground hook + foreground-process resolution.
+SetWinEventHook
+UnhookWinEvent
+QueryFullProcessImageName
+OpenProcess
+CloseHandle
+GetGUIThreadInfo
+EVENT_OBJECT_FOCUS
+EVENT_SYSTEM_FOREGROUND
+EVENT_OBJECT_LOCATIONCHANGE
+WINEVENT_OUTOFCONTEXT
+WINEVENT_SKIPOWNPROCESS

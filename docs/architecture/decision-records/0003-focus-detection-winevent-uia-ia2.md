@@ -2,7 +2,7 @@
 
 Owner: Mehdi
 Status: Accepted
-Last reviewed: 2026-06-28
+Last reviewed: 2026-06-29
 
 ## Context
 
@@ -51,6 +51,65 @@ Replicate Grammarly's technique:
 - Per-app fragility is expected (Grammarly ships a calibration table for the same reason). Qt
   (Telegram) may expose only element bounds, not a caret — acceptable.
 - Forcing Chromium accessibility adds CPU cost to the target app — a known, documented trade-off.
+
+## Validation (2026-06-29, on the dev machine)
+
+A UIA tree-walk probe + a deep read of Grammarly's `Resources/Configuration/IntegrationOptions.json`
+confirmed the model and drove these **refinements actually implemented** (M2):
+
+- **App identity = the foreground top-level window, not the focus-event hwnd.** Modern WhatsApp is a
+  WinUI shell **`WhatsApp.Root.exe`** (`WinUIDesktopWin32WindowClass`) hosting a `WebView2`; the focus
+  event's window often belongs to `msedgewebview2.exe`. We resolve the app (and the injection target)
+  from `GetForegroundWindow()` so it reads `WhatsApp.Root.exe`, while the field comes from UIA's
+  system-wide focused element.
+- **Opt-out activation:** the badge appears in any editable field; the only filter is a `blocklist`
+  of regex "monikers" matched against the process file name (Grammarly's `Moniker`). The earlier
+  allowlist was removed — users expect translation everywhere, not just messengers. See
+  [configuration.md](../../reference/configuration.md).
+- **Managed `System.Windows.Automation` was used** (not COM `IUIAutomation`) — it needs no NuGet
+  (offline build) and, on this build, resolved both targets without an explicit IA2 wake:
+  - WhatsApp field: `ControlType.Edit`, Name `Type a message to <chat>`, patterns **Value(read-only)+Text**.
+  - Telegram field: `ControlType.Edit`, ClassName `Ui::InputField::Inner`, patterns Value+Text.
+  The explicit **IAccessible2 enabler stays a documented fallback** for apps whose UIA tree is empty.
+- **`IsEditable` accepts an `Edit` with a read-only `ValuePattern` when it has a `TextPattern`** — the
+  WhatsApp Chromium contenteditable case (a strict writable-Value check wrongly rejected it).
+- **UIA resolution runs off the pump thread with a timeout** (M2 review fix), per the Consequences note.
+- **Per-app `Offset`/`Corner`** mirror Grammarly's per-app `DefaultPosition` (observed e.g. Slack
+  `TopRight, -20,-25`; Gmail body `TopRight, 10,-20`); ours live in `appOffsets`.
+- Diagnostics: set `AITR_FOCUS_LOG=1` to trace the watcher's decisions to `%TEMP%\ai-translator-focus.log`.
+
+## Validation (2026-06-30, on the dev machine) — the WhatsApp "separate window" finding
+
+The badge worked nearly everywhere but **never in WhatsApp**. A throwaway UIA probe run directly
+against the live process (`scratchpad/wa-probe`, no keyboard focus needed) pinned down why and drove
+the implemented fix:
+
+- **WhatsApp Business hosts its chat in a SEPARATE top-level window, not a child of the foreground.**
+  The foreground is `WhatsApp.Root.exe` (`WinUIDesktopWin32WindowClass`); its only Chromium child is a
+  **0×0 placeholder** `Chrome_WidgetWin_0`, and its UIA tree has **zero** editable elements. The chat
+  actually lives in an independent top-level window — class `Chrome_WidgetWin_1`, title
+  `"WhatsApp Business"`, in an `msedgewebview2.exe` process — with **no owner/parent** link to the
+  foreground window. `EnumChildWindows(foreground)` therefore can never reach it, which defeated every
+  child-only approach.
+- **The reliable link is process ancestry.** WebView2 spawns `msedgewebview2.exe` as a **child process**
+  of the host app (verified: the webview window's PID's parent is `WhatsApp.Root.exe`). The resolver now
+  also scans **top-level `Chrome_*` windows whose process belongs to the foreground app's process family**
+  (computed from a `CreateToolhelp32Snapshot` parent map), collects their render widgets, and drills each.
+- **The field is reachable and editable once the right window is drilled.** Under the render widget
+  (`Chrome_RenderWidgetHostHWND`), `FindFirst(TreeScope.Descendants, HasKeyboardFocus=true)` returns
+  exactly the message box: `ControlType.Edit`, Name `Type a message to <chat>`, a **writable**
+  ValuePattern and a TextPattern, with a valid `BoundingRectangle`. (So the earlier note that Value is
+  read-only was specific to an older build; the current contenteditable exposes a *writable* Value.)
+- **`HasKeyboardFocus` is set even though the webview window is not the OS foreground** — Chromium reports
+  DOM focus regardless — so drilling the render widget's subtree for the focused element is sound.
+- **Implementation:** `TargetResolver` wakes each candidate render widget via
+  `AccessibleObjectFromWindow(OBJID_CLIENT)` (the MSAA handshake), tries the OS-wide focus first, then
+  drills. A freshly woken renderer builds its tree asynchronously, so `Resolve` is **non-blocking** and
+  returns a `FieldStatus.Pending`; `FocusWatcher` then runs a bounded, self-driven `DispatcherTimer`
+  retry instead of tearing the badge down or depending on a foreground-thread event that never fires for
+  the separate render thread. (Hardened after a multi-agent adversarial review of the first cut.)
+- Diagnostics are **on by default** during this work (`AITR_FOCUS_LOG=0` disables); they log the focused
+  element + each drilled candidate. To be gated back off once WhatsApp is confirmed in normal use.
 
 ## Sources
 

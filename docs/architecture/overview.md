@@ -18,21 +18,21 @@ Related: [ADR index](decision-records/README.md) · [diagrams](diagrams/componen
 ## 1. Purpose & scope
 
 A Windows desktop utility that replicates **Grammarly's in-field assistant UX** for translation.
-When the user focuses an editable text field inside an allowlisted messaging app, a small **badge**
-appears beside the field. Clicking it opens a floating **input box**; the user types in their own
-language and the translation streams **into the messenger's real input box**, ready to send.
+When the user focuses an editable text field (in any app, except ones they blocklist), a small
+**badge** appears beside the field. Clicking it opens a floating **input box**; the user types in
+their own language and the translation goes **into the app's real input box**, ready to send.
 
 **In scope:** typed-text translation, multi-language with auto-direction, badge-beside-field auto
-appearance in allowlisted apps, a manual global hotkey, a settings window, secure per-user API-key
-storage.
+appearance in any editable field (opt-out via a blocklist), a manual global hotkey, a settings window,
+secure per-user API-key storage.
 
 **Out of scope (now):** voice/speech translation, mobile, translating *incoming* messages, and any
 server-side backend. These are noted in [§9 Roadmap](#9-roadmap) but not built first.
 
 ## 2. Core behavior (the user-visible contract)
 
-1. **Detect** — A system-wide focus watcher notices when an editable text field gains focus inside
-   an app on the allowlist (default: WhatsApp, Telegram). Password and read-only fields are skipped.
+1. **Detect** — A system-wide focus watcher notices when an editable text field gains focus in any
+   app, except ones the user has blocklisted. Password and read-only fields are skipped.
 2. **Badge** — A small always-on-top badge window anchors next to the field (bottom-right corner by
    default, with a per-app offset). It tracks the field as the window moves/scrolls and disappears
    when focus leaves the field. A configurable **global hotkey** is an always-available alternative
@@ -133,6 +133,11 @@ See [ADR-0002](decision-records/0002-translation-openai-responses-streaming.md) 
 - A strict system prompt returns **translation only** (no chatter), with the configured language
   pair injected and **auto-direction** detection. Plain text output (no JSON wrapping).
 - Default model is configurable; see the reference doc for current options and the live-verify note.
+- **Compose-mode rewrite styles + humanizer** ([ADR-0007](decision-records/0007-rewrite-styles-and-humanizer.md)):
+  a `TranslationRequest` carries the text, direction, model, an optional rewrite **style**
+  (Original/Professional/Formal/Friendly/Email/Concise/Expand), and a **humanize** flag. `PromptBuilder`
+  composes all three into one call; a short-lived LRU cache keys on style + humanize. Read mode (translate
+  a selection) always uses `Original`.
 
 ## 8. Cross-cutting concerns
 
@@ -157,13 +162,21 @@ See [ADR-0002](decision-records/0002-translation-openai-responses-streaming.md) 
 ## 9. Roadmap
 
 1. **M0 — Workspace & design** (done): repo, standards-compliant docs, ADRs, this spec.
-2. **M1 — Walking skeleton:** tray app + settings + Credential Manager key + manual-hotkey overlay +
-   OpenAI streaming translation + clipboard injection into the *currently focused* field (no badge
-   yet). Proves the end-to-end path on Win32 targets.
-3. **M2 — Grammarly-style awareness:** `FocusWatcher` + `TargetResolver` + `BadgeWindow` with UIA;
-   allowlist; per-app offset calibration.
-4. **M3 — Chromium/WebView2 + Qt coverage:** IAccessible2 enable path for WhatsApp(WebView2)/Electron;
-   Telegram(Qt) anchoring; live-replace injection tuning.
+2. **M1 — Walking skeleton** (built on Windows): tray app + settings + Credential Manager key +
+   manual-hotkey overlay + OpenAI streaming translation + clipboard injection into the *currently
+   focused* field (no badge yet). Proves the end-to-end path on Win32 targets.
+   *Status:* all layers **build green on Windows** (`dotnet build` 0/0, `dotnet test` 40/40) and the
+   app launches; the remaining gate is the manual runtime acceptance test —
+   [windows-build-checklist.md](../guides/windows-build-checklist.md). Plan:
+   [plans/2026-06-28-m1-walking-skeleton.md](../plans/2026-06-28-m1-walking-skeleton.md).
+3. **M2 — Grammarly-style awareness** (built on Windows): `FocusWatcher` (SetWinEventHook) +
+   `TargetResolver` (managed UIA) + non-activating `BadgeWindow`; allowlist/blocklist editor;
+   per-app offset calibration (`appOffsets`). *Status:* machinery built (0/0) and the watcher runs;
+   per-app badge behaviour (WhatsApp/Telegram) is validated app-by-app.
+   Plan: [plans/2026-06-29-m2-awareness.md](../plans/2026-06-29-m2-awareness.md).
+4. **M3 — Chromium/WebView2 + Qt coverage:** IAccessible2 enable path for WhatsApp(WebView2)/Electron
+   (if UIA proves insufficient); Telegram(Qt) anchoring; non-activating overlay + live-replace
+   injection tuning (no focus flicker).
 5. **M4 — Hardening & release:** logging, error states, code signing, Velopack auto-update.
 
 Each milestone gets its own plan via the writing-plans workflow before code is written.

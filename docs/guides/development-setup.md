@@ -2,10 +2,9 @@
 
 Owner: Mehdi
 Status: Accepted
-Last reviewed: 2026-06-28
+Last reviewed: 2026-06-29
 
-How to get a working dev environment. The `src/` solution is created in milestone M1; until then this
-covers the repo + tooling.
+How to set up to build, run, and test on Windows. The `src/AiTranslator.slnx` solution already exists.
 
 ## Prerequisites (Windows)
 
@@ -18,11 +17,11 @@ covers the repo + tooling.
 - Useful for debugging accessibility: **Accessibility Insights for Windows** / `Inspect.exe` to see
   how target apps expose their text fields.
 
-## Editing from WSL/Linux
+## Packages
 
-The repo can be edited from WSL (it lives on the Linux filesystem), but **builds and runs must happen
-on Windows**. Do not attempt `dotnet build` of the WPF app from a Linux shell — the Windows Desktop
-targeting packs are unavailable there, so it will fail and cannot be verified.
+Standard online restore from `nuget.org` — pinned as the single source in `src/nuget.config`, with
+versions managed centrally in `src/Directory.Packages.props`. `dotnet restore` (or the first build)
+pulls everything; no special setup.
 
 ## Dev OpenAI key
 

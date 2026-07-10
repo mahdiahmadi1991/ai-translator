@@ -1,0 +1,46 @@
+using System.Collections.ObjectModel;
+using AiTranslator.Core.Awareness;
+
+namespace AiTranslator.Core.Models;
+
+/// <summary>
+/// All non-secret, user-configurable settings. Persisted as JSON; the OpenAI key is NOT here
+/// (it lives in Windows Credential Manager). Field names mirror docs/reference/configuration.md.
+/// </summary>
+public sealed record AppSettings
+{
+    public int SchemaVersion { get; init; } = 1;
+    public LanguagePair LanguagePair { get; init; } = new("fa", "en");
+    public bool AutoDirection { get; init; } = true;
+    public string Model { get; init; } = "gpt-5.1";
+    public int DebounceMs { get; init; } = 500;
+    public string Hotkey { get; init; } = "Ctrl+Alt+T";
+    public bool AutoAppearBadge { get; init; } = true;
+
+    /// <summary>The "read" mode: show a translate icon when text is selected anywhere (opt-out).</summary>
+    public bool SelectionTranslator { get; init; } = true;
+
+    /// <summary>Global hotkey that translates the current selection (the guaranteed read-mode path).</summary>
+    public string SelectionHotkey { get; init; } = "Ctrl+Alt+S";
+
+    /// <summary>The rewrite style applied when composing in the floating box; persists the last choice (ADR-0007).</summary>
+    public TranslationStyle RewriteStyle { get; init; } = TranslationStyle.Original;
+
+    /// <summary>Make translations read like a human wrote them (the "humanizer" layer). Opt-out.</summary>
+    public bool HumanizeTranslations { get; init; } = true;
+
+    // Opt-out model: the badge appears anywhere an editable field is focused, except apps whose exe
+    // matches a Blocklist "moniker" (regex against the process name — see ExeName). Empty = everywhere.
+    public IReadOnlyList<string> Blocklist { get; init; } = [];
+
+    /// <summary>Per-exe badge offset calibration (<c>appOffsets</c>); empty until the user calibrates.</summary>
+    public IReadOnlyDictionary<string, AppOffset> AppOffsets { get; init; }
+        = ReadOnlyDictionary<string, AppOffset>.Empty;
+
+    public string Theme { get; init; } = "system";
+    public string UiLanguage { get; init; } = "fa";
+    public bool RunAtStartup { get; init; } = false;
+    public bool AutoSend { get; init; } = false;
+
+    public static AppSettings Default { get; } = new();
+}

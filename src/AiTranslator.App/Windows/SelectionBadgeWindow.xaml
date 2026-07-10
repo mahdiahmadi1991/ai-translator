@@ -1,0 +1,50 @@
+<windows:NonActivatingWindow x:Class="AiTranslator.App.Windows.SelectionBadgeWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:windows="clr-namespace:AiTranslator.App.Windows"
+        xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+        xmlns:res="clr-namespace:AiTranslator.App.Resources"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="Transparent"
+        SizeToContent="WidthAndHeight">
+    <!-- Margin leaves room for the drop shadow so it isn't clipped by the layered window. -->
+    <Border x:Name="Root" Width="28" Height="28" Margin="6" CornerRadius="14" Cursor="Hand" Opacity="0.9"
+            ToolTip="{x:Static res:UiStrings.SelectionTooltip}" RenderTransformOrigin="0.5,0.5"
+            AutomationProperties.Name="{x:Static res:UiStrings.SelectionTooltip}">
+        <Border.Background>
+            <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                <GradientStop Color="#FF5CC26E" Offset="0" />
+                <GradientStop Color="#FF2FA35A" Offset="1" />
+            </LinearGradientBrush>
+        </Border.Background>
+        <Border.Effect>
+            <DropShadowEffect Color="#FF0A331A" BlurRadius="8" ShadowDepth="1.5" Opacity="0.5" />
+        </Border.Effect>
+        <Border.RenderTransform>
+            <ScaleTransform x:Name="HoverScale" ScaleX="1" ScaleY="1" />
+        </Border.RenderTransform>
+        <ui:SymbolIcon Symbol="Translate24" Foreground="White" FontSize="15"
+                       HorizontalAlignment="Center" VerticalAlignment="Center" />
+        <Border.Triggers>
+            <EventTrigger RoutedEvent="MouseEnter">
+                <BeginStoryboard>
+                    <Storyboard>
+                        <DoubleAnimation Storyboard.TargetName="HoverScale" Storyboard.TargetProperty="ScaleX" To="1.12" Duration="0:0:0.12" />
+                        <DoubleAnimation Storyboard.TargetName="HoverScale" Storyboard.TargetProperty="ScaleY" To="1.12" Duration="0:0:0.12" />
+                        <DoubleAnimation Storyboard.TargetName="Root" Storyboard.TargetProperty="Opacity" To="1" Duration="0:0:0.12" />
+                    </Storyboard>
+                </BeginStoryboard>
+            </EventTrigger>
+            <EventTrigger RoutedEvent="MouseLeave">
+                <BeginStoryboard>
+                    <Storyboard>
+                        <DoubleAnimation Storyboard.TargetName="HoverScale" Storyboard.TargetProperty="ScaleX" To="1" Duration="0:0:0.12" />
+                        <DoubleAnimation Storyboard.TargetName="HoverScale" Storyboard.TargetProperty="ScaleY" To="1" Duration="0:0:0.12" />
+                        <DoubleAnimation Storyboard.TargetName="Root" Storyboard.TargetProperty="Opacity" To="0.9" Duration="0:0:0.18" />
+                    </Storyboard>
+                </BeginStoryboard>
+            </EventTrigger>
+        </Border.Triggers>
+    </Border>
+</windows:NonActivatingWindow>

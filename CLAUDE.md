@@ -4,6 +4,11 @@ Working rules specific to this repository. Global rules in `~/.claude/global-rul
 standards in `~/.claude/standards/` still apply; this file only adds project-specific context and
 overrides where noted.
 
+## Start here
+
+New to this repo? Read **[docs/status.md](docs/status.md)** first — current state, what's verified,
+and the immediate next task. Development now happens **natively on Windows**.
+
 ## What this project is
 
 A Windows desktop app (.NET 10 + WPF) that shows a Grammarly-style badge beside the focused text
@@ -17,16 +22,19 @@ and streams an OpenAI translation **into the messenger's real input box**. Full 
   as the behavior they describe. Route new docs via [docs/_meta/document-routing.md](docs/_meta/document-routing.md).
 - **Decisions:** [`docs/architecture/decision-records/`](docs/architecture/decision-records/README.md).
   Add an ADR before reversing or making a load-bearing technical choice.
-- **Planned source layout:** [docs/reference/source-layout.md](docs/reference/source-layout.md).
-  The `src/` solution is created during implementation, not before.
+- **Source layout:** [docs/reference/source-layout.md](docs/reference/source-layout.md). The `src/`
+  solution (`.slnx`) exists: `Core`/`Tests` are built and green; `Infrastructure`/`App` are written
+  and await their first Windows build.
 - **Secrets:** only under [`.secrets/`](.secrets/README.md) (git-ignored). The user's OpenAI key is
   never stored in the repo, in code, or in committed config.
 
 ## Build & run reality
 
-- **WPF builds and runs only on Windows.** This workspace may be edited from WSL/Linux, but
-  `dotnet build`/`run` of the WPF app must happen on Windows (target `net10.0-windows`). Do not
-  claim a Windows-only build "passes" from a Linux shell — it cannot be verified there.
+- **Build/run/test natively on Windows** (target `net10.0-windows`). You can — and must — verify
+  every change here: run `dotnet build` / `dotnet test` and the manual acceptance test, and report
+  the actual output. No "passes" claims without it.
+- **NuGet:** standard online restore from `nuget.org` (pinned as the single source in
+  `src/nuget.config`; versions are centrally managed in `src/Directory.Packages.props`).
 - The app reads global focus and injects keystrokes; it cannot interact with windows running as
   Administrator unless it is elevated too (UIPI). See the security notes in the overview.
 
@@ -44,4 +52,8 @@ and streams an OpenAI translation **into the messenger's real input box**. Full 
 ## Git
 
 `main` / `test` / `develop` are protected. Work on `feature/…` / `fix/…` / `chore/…` branches off
-`develop`. **Never commit, push, or merge without explicit permission in the conversation.**
+`develop`; promote `feature → develop` via squash + `--no-ff` (per the git standard). The solution
+file is `src/AiTranslator.slnx`.
+
+**Commit & merge are pre-authorized for this project** — commit coherent units and merge into
+`develop` without pausing for per-change approval. There is **no git remote**, so do not `push`.

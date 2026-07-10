@@ -16,6 +16,7 @@ Start new ones from [../../templates/adr-template.md](../../templates/adr-templa
 | [0004](0004-text-injection-clipboard-paste.md) | Text injection via clipboard-paste primary, with fallbacks | Accepted |
 | [0005](0005-secret-storage-credential-manager.md) | API-key storage in Windows Credential Manager | Accepted |
 | [0006](0006-distribution-velopack.md) | Distribution & auto-update via Velopack | Accepted |
+| [0007](0007-rewrite-styles-and-humanizer.md) | AI rewrite styles + human-sounding output (single-call prompt composition) | Accepted |
 
 These are grounded in the research summarized in [../overview.md](../overview.md). Where a fact may
 drift over time (model names, SDK versions), the ADR says so and points to the reference docs.

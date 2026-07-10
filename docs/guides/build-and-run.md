@@ -2,17 +2,16 @@
 
 Owner: Mehdi
 Status: Accepted
-Last reviewed: 2026-06-28
+Last reviewed: 2026-06-29
 
-> All commands run **on Windows** (PowerShell or a dev shell). See
-> [development-setup.md](development-setup.md) for why Linux/WSL cannot build the WPF app.
-> These commands become live once the `src/` solution exists (milestone M1).
+> Commands run **on Windows** (PowerShell or a dev shell). Restore is a standard online restore from
+> `nuget.org` (pinned as the single source in `src/nuget.config`).
 
 ## Restore & build
 
 ```powershell
-dotnet restore src/AiTranslator.sln
-dotnet build   src/AiTranslator.sln -c Debug
+dotnet restore src/AiTranslator.slnx
+dotnet build   src/AiTranslator.slnx -c Debug
 ```
 
 ## Run
@@ -23,6 +22,13 @@ dotnet run --project src/AiTranslator.App
 
 The app starts to the tray. Open settings from the tray icon to enter the OpenAI key (or rely on the
 DEBUG `.secrets` dev key), choose the language pair, and set the hotkey.
+
+> **Smart App Control / WDAC:** a freshly-built, unsigned `AiTranslator.App.exe` (apphost) is blocked
+> by Windows ("Part of this app has been blocked … can't confirm who published…"). So **Debug builds
+> emit no `.exe`** (`UseAppHost=false`); run through the trusted **dotnet host**, which is not blocked:
+> `dotnet run --project src/AiTranslator.App`, or the fast path on the last build
+> `dotnet "src/AiTranslator.App/bin/Debug/net10.0-windows/AiTranslator.App.dll"`. The release apphost
+> is Authenticode-signed (see Publish) so end users don't hit this.
 
 ## Test
 
