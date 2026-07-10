@@ -33,6 +33,15 @@ public partial class App : Application
     private IFocusWatcher? _focusWatcher;
     private BadgeWindow? _badge;
     private FocusedField? _activeField;
+
+    // Read mode: translate selected text anywhere.
+    private ISelectionWatcher? _selectionWatcher;
+    private SelectionBadgeWindow? _selectionBadge;
+    private SelectionResultWindow? _selectionResult;
+    private HotkeyService? _selectionHotkey;
+    private SelectedText? _activeSelection;
+    private bool _hasSelection;
+
     private AppSettings _settings = AppSettings.Default;
 
     protected override void OnStartup(StartupEventArgs e)
@@ -102,11 +111,14 @@ public partial class App : Application
 
         _hotkey = new HotkeyService(_msgSource.Handle);
         _hotkey.HotkeyPressed += (_, _) => ShowOverlay();
+
+        _selectionHotkey = new HotkeyService(_msgSource.Handle, hotkeyId: 0xA12);
+        _selectionHotkey.HotkeyPressed += (_, _) => OnSelectionHotkey();
     }
 
     private nint WndProc(nint hwnd, int msg, nint wParam, nint lParam, ref bool handled)
     {
-        if (_hotkey.OnMessage((uint)msg, wParam))
+        if (_hotkey.OnMessage((uint)msg, wParam) || _selectionHotkey?.OnMessage((uint)msg, wParam) == true)
         {
             handled = true;
         }
@@ -121,6 +133,8 @@ public partial class App : Application
             // Real, actionable state (not a stub): tell the user to pick a free combo in Settings.
             _tray?.ShowNotification(title: UiStrings.AppName, message: UiStrings.SettingsHotkeyTaken);
         }
+
+        _selectionHotkey?.Register(_settings.SelectionHotkey);   // read-mode hotkey (best-effort)
     }
 
     private void CreateTrayIcon()
@@ -212,6 +226,15 @@ public partial class App : Application
         {
             StopAwareness();
         }
+
+        if (_settings.SelectionTranslator)
+        {
+            StartSelectionWatcher();
+        }
+        else
+        {
+            StopSelectionWatcher();
+        }
     }
 
     private void StartAwareness()
@@ -248,6 +271,113 @@ public partial class App : Application
         _activeField = null;
     }
 
+    // ---- Read mode: translate selected text ----------------------------------------------------
+
+    private void StartSelectionWatcher()
+    {
+        if (_selectionWatcher is not null)
+        {
+            return;
+        }
+
+        _selectionBadge = new SelectionBadgeWindow();
+        _selectionBadge.Clicked += (_, _) => OnSelectionBadgeClicked();
+
+        _selectionWatcher = new SelectionWatcher(() => _settings);
+        _selectionWatcher.SelectionChanged += OnSelectionChanged;
+        _selectionWatcher.SelectionCleared += OnSelectionCleared;
+        _selectionWatcher.Start();
+    }
+
+    private void StopSelectionWatcher()
+    {
+        if (_selectionWatcher is not null)
+        {
+            _selectionWatcher.SelectionChanged -= OnSelectionChanged;
+            _selectionWatcher.SelectionCleared -= OnSelectionCleared;
+            _selectionWatcher.Dispose();
+            _selectionWatcher = null;
+        }
+
+        _selectionBadge?.Close();
+        _selectionBadge = null;
+        _activeSelection = null;
+        _hasSelection = false;
+    }
+
+    private void OnSelectionChanged(object? sender, SelectedText selection)
+        => Dispatcher.InvokeAsync(() => ShowSelectionBadge(selection));
+
+    private void OnSelectionCleared(object? sender, EventArgs e)
+        => Dispatcher.InvokeAsync(HideSelectionBadge);
+
+    private void ShowSelectionBadge(SelectedText selection)
+    {
+        _activeSelection = selection;
+        _hasSelection = true;
+        HideBadge();   // while text is selected, the read icon takes precedence over the write badge
+        if (selection.Bounds is { } rect)
+        {
+            _selectionBadge?.ShowAt(rect);
+        }
+        else
+        {
+            _selectionBadge?.Hide();   // no bounds — the read-mode hotkey still works
+        }
+    }
+
+    private void HideSelectionBadge()
+    {
+        _selectionBadge?.Hide();
+        _activeSelection = null;
+        _hasSelection = false;
+    }
+
+    private void OnSelectionBadgeClicked()
+    {
+        if (_activeSelection is { } selection)
+        {
+            _selectionBadge?.Hide();
+            OpenSelectionResult(selection, selection.Bounds);
+        }
+    }
+
+    private void OnSelectionHotkey()
+    {
+        var selection = _selectionWatcher?.CaptureCurrentSelection();
+        if (selection is not null)
+        {
+            OpenSelectionResult(selection, selection.Bounds);
+        }
+    }
+
+    private void OpenSelectionResult(SelectedText selection, System.Drawing.Rectangle? anchor)
+    {
+        try
+        {
+            _selectionResult ??= CreateSelectionResult();
+            _selectionResult.ShowFor(selection, anchor);
+        }
+        catch (Exception ex)
+        {
+            _tray?.ShowNotification(title: UiStrings.AppName, message: $"{UiStrings.OverlayError} {ex.Message}");
+        }
+    }
+
+    private SelectionResultWindow CreateSelectionResult()
+    {
+        var window = new SelectionResultWindow(
+            _services.GetRequiredService<ITranslationService>(), () => _settings);
+        window.Closed += (_, _) =>
+        {
+            if (ReferenceEquals(_selectionResult, window))
+            {
+                _selectionResult = null;
+            }
+        };
+        return window;
+    }
+
     // The watcher raises events on its own STA thread — marshal to the UI thread. Use the NON-blocking
     // InvokeAsync so the watcher thread never waits on the UI thread (a blocking Invoke would deadlock
     // for ~2s against StopAwareness()'s Join during app exit / settings toggle).
@@ -259,6 +389,11 @@ public partial class App : Application
 
     private void ShowBadge(FocusedField field)
     {
+        if (_hasSelection)
+        {
+            return;   // a selection is active → the read icon takes precedence over the write badge
+        }
+
         _activeField = field;
         _badge?.SetAppName(field.ExeName);   // label the right-click "don't show in <app>" item
         if (field.FieldRect is { } rect)
@@ -341,7 +476,10 @@ public partial class App : Application
     {
         CloseOverlay();
         StopAwareness();
+        StopSelectionWatcher();
+        _selectionResult?.Close();
         _hotkey?.Dispose();
+        _selectionHotkey?.Dispose();
         _msgSource?.Dispose();
         _tray?.Dispose();
         _services?.Dispose();
