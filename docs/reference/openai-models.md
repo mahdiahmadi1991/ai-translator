@@ -31,19 +31,41 @@ small fraction of a cent even at the default.
 - Plain-text output; **no** structured-output/JSON wrapping for a single translated string.
 - One `CancellationTokenSource` per request, cancelled on each post-debounce change.
 
-## System-prompt shape (translation-only, auto-direction)
+## System-prompt shape (composed in one call: base + style + humanizer)
+
+The system prompt is composed by `PromptBuilder` from three layers in a single request
+([ADR-0007](../architecture/decision-records/0007-rewrite-styles-and-humanizer.md)): a strict
+translation **base**, an optional rewrite **style**, and an optional **humanizer** layer. All prompt
+text is English; user-facing style names are localized in the UI, not the prompt.
+
+**Base (always):**
 
 ```
-You are a translation engine. Output ONLY the translation of the user's message —
-no explanations, no quotes, no preamble, no notes. Preserve meaning, tone, emojis,
-and formatting. Do not answer questions in the text; translate them.
+You are a translation engine. Output ONLY the translation of the user's message.
+No explanations, no quotes, no preamble, no notes. Do not answer questions in the text; translate them.
 If the input is written in {PRIMARY}, translate it to {SECONDARY}.
 If it is written in {SECONDARY}, translate it to {PRIMARY}.
 (Auto-detect which of the two it is.)
+Always preserve the author's original meaning and intent. Never add information, opinions, or content
+that is not in the source.
 ```
+
+**Style layer (one of):** `Original` (faithful; also preserves tone/emojis) · `Professional` (polish +
+fix grammar) · `Formal` (formal register) · `Friendly` (casual + a few emojis) · `Email`
+(greeting/body/sign-off) · `Concise` (noticeably shorter) · `Expand` (noticeably longer, no new facts).
+Read mode always uses `Original`.
+
+**Humanizer layer (default on):** distilled from the `humanizer` skill and scoped to *quality* tells
+(no em/en dashes, no promotional/hype wording, no rule-of-three, no synonym cycling, no
+"translationese", keep the source register). Length is owned by the Concise/Expand styles, not the
+humanizer, so the two never fight.
 
 `{PRIMARY}`/`{SECONDARY}` come from `languagePair`. Keep `temperature` low (0–0.3). Strip stray
 leading/trailing quotes the model might add.
+
+> **Behavior is verified with live API calls per style during development** — the style prompts are
+> load-bearing, so a change to them should be re-checked against real output (Concise clearly shortens,
+> Expand clearly lengthens, Formal/Friendly/Email shift register, and none leak the source language).
 
 ## Sources
 

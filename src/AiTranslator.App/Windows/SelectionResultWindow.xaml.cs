@@ -184,9 +184,12 @@ public partial class SelectionResultWindow : Window
 
         var settings = _settingsProvider();
         var direction = new TranslationDirection(_sourceLang, target);
+        // Read mode is always a faithful translation; it still honors the human-sounding setting.
+        var request = new TranslationRequest(
+            _source, direction, settings.Model, TranslationStyle.Original, settings.HumanizeTranslations);
         try
         {
-            await foreach (var chunk in _translator.TranslateStreamAsync(_source, direction, settings.Model, ct))
+            await foreach (var chunk in _translator.TranslateStreamAsync(request, ct))
             {
                 if (BusyOverlay.Visibility == Visibility.Visible)
                 {

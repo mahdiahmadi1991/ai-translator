@@ -10,6 +10,11 @@ public class CachingTranslationServiceTests
 {
     private static readonly TranslationDirection EnFa = new("en", "fa");
 
+    private static TranslationRequest Req(
+        string text, TranslationDirection? dir = null, string model = "m",
+        TranslationStyle style = TranslationStyle.Original, bool humanize = true)
+        => new(text, dir ?? EnFa, model, style, humanize);
+
     // ---- helpers -----------------------------------------------------------------------------
 
     /// <summary>An in-memory inner service: yields configured chunks, counts calls, and can throw
@@ -30,8 +35,7 @@ public class CachingTranslationServiceTests
         public int CallCount { get; private set; }
 
         public async IAsyncEnumerable<string> TranslateStreamAsync(
-            string text, TranslationDirection direction, string model,
-            [EnumeratorCancellation] CancellationToken ct)
+            TranslationRequest request, [EnumeratorCancellation] CancellationToken ct)
         {
             CallCount++;
             await Task.Yield();
@@ -91,8 +95,8 @@ public class CachingTranslationServiceTests
         var inner = new FakeInner(["Hel", "lo"]);
         var cache = Cache(inner, Clock());
 
-        var first = string.Concat(await Drain(cache.TranslateStreamAsync("hi", EnFa, "m", default)));
-        var second = string.Concat(await Drain(cache.TranslateStreamAsync("hi", EnFa, "m", default)));
+        var first = string.Concat(await Drain(cache.TranslateStreamAsync(Req("hi"), default)));
+        var second = string.Concat(await Drain(cache.TranslateStreamAsync(Req("hi"), default)));
 
         Assert.Equal(1, inner.CallCount);
         Assert.Equal("Hello", first);
@@ -105,8 +109,8 @@ public class CachingTranslationServiceTests
         var inner = new FakeInner(["a", "b", "c"]);
         var cache = Cache(inner, Clock());
 
-        var miss = await Drain(cache.TranslateStreamAsync("x", EnFa, "m", default));
-        var hit = await Drain(cache.TranslateStreamAsync("x", EnFa, "m", default));
+        var miss = await Drain(cache.TranslateStreamAsync(Req("x"), default));
+        var hit = await Drain(cache.TranslateStreamAsync(Req("x"), default));
 
         Assert.Equal(3, miss.Count);          // miss streams through chunk-by-chunk
         Assert.Single(hit);                   // hit returns the whole value at once
@@ -124,13 +128,13 @@ public class CachingTranslationServiceTests
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
         {
-            await foreach (var _ in cache.TranslateStreamAsync("hi", EnFa, "m", cts.Token))
+            await foreach (var _ in cache.TranslateStreamAsync(Req("hi"), cts.Token))
             {
                 cts.Cancel();   // cancel mid-stream
             }
         });
 
-        await Drain(cache.TranslateStreamAsync("hi", EnFa, "m", default));
+        await Drain(cache.TranslateStreamAsync(Req("hi"), default));
         Assert.Equal(2, inner.CallCount);   // nothing was cached from the cancelled run
     }
 
@@ -140,12 +144,12 @@ public class CachingTranslationServiceTests
         var inner = new FakeInner(["one", "two", "three"]);
         var cache = Cache(inner, Clock());
 
-        await foreach (var _ in cache.TranslateStreamAsync("hi", EnFa, "m", default))
+        await foreach (var _ in cache.TranslateStreamAsync(Req("hi"), default))
         {
             break;   // read the first chunk only, then abandon the stream
         }
 
-        await Drain(cache.TranslateStreamAsync("hi", EnFa, "m", default));
+        await Drain(cache.TranslateStreamAsync(Req("hi"), default));
         Assert.Equal(2, inner.CallCount);
     }
 
@@ -156,11 +160,11 @@ public class CachingTranslationServiceTests
         var cache = Cache(inner, Clock());
 
         await Assert.ThrowsAsync<InvalidOperationException>(
-            async () => await Drain(cache.TranslateStreamAsync("hi", EnFa, "m", default)));
+            async () => await Drain(cache.TranslateStreamAsync(Req("hi"), default)));
 
         var good = new FakeInner(["ok"]);
         var cache2 = Cache(good, Clock());
-        await Drain(cache2.TranslateStreamAsync("hi", EnFa, "m", default));
+        await Drain(cache2.TranslateStreamAsync(Req("hi"), default));
 
         Assert.Equal(1, inner.CallCount);   // the failed run was never stored
     }
@@ -171,8 +175,8 @@ public class CachingTranslationServiceTests
         var inner = new FakeInner([]);
         var cache = Cache(inner, Clock());
 
-        await Drain(cache.TranslateStreamAsync("hi", EnFa, "m", default));
-        await Drain(cache.TranslateStreamAsync("hi", EnFa, "m", default));
+        await Drain(cache.TranslateStreamAsync(Req("hi"), default));
+        await Drain(cache.TranslateStreamAsync(Req("hi"), default));
 
         Assert.Equal(2, inner.CallCount);
     }
@@ -183,8 +187,8 @@ public class CachingTranslationServiceTests
         var inner = new FakeInner(["x"]);
         var cache = Cache(inner, Clock());
 
-        await Drain(cache.TranslateStreamAsync("   ", EnFa, "m", default));
-        await Drain(cache.TranslateStreamAsync("   ", EnFa, "m", default));
+        await Drain(cache.TranslateStreamAsync(Req("   "), default));
+        await Drain(cache.TranslateStreamAsync(Req("   "), default));
 
         Assert.Equal(2, inner.CallCount);
     }
@@ -197,8 +201,8 @@ public class CachingTranslationServiceTests
         var inner = new FakeInner(["v"]);
         var cache = Cache(inner, Clock());
 
-        await Drain(cache.TranslateStreamAsync(" hello ", EnFa, "m", default));
-        await Drain(cache.TranslateStreamAsync("hello", EnFa, "m", default));
+        await Drain(cache.TranslateStreamAsync(Req(" hello "), default));
+        await Drain(cache.TranslateStreamAsync(Req("hello"), default));
 
         Assert.Equal(1, inner.CallCount);
     }
@@ -209,8 +213,8 @@ public class CachingTranslationServiceTests
         var inner = new FakeInner(["v"]);
         var cache = Cache(inner, Clock());
 
-        await Drain(cache.TranslateStreamAsync("Hello", EnFa, "m", default));
-        await Drain(cache.TranslateStreamAsync("hello", EnFa, "m", default));
+        await Drain(cache.TranslateStreamAsync(Req("Hello"), default));
+        await Drain(cache.TranslateStreamAsync(Req("hello"), default));
 
         Assert.Equal(2, inner.CallCount);
     }
@@ -222,8 +226,8 @@ public class CachingTranslationServiceTests
         var inner = new FakeInner(["v"]);
         var cache = Cache(inner, Clock());
 
-        await Drain(cache.TranslateStreamAsync("hi", EnFa, a, default));
-        await Drain(cache.TranslateStreamAsync("hi", EnFa, b, default));
+        await Drain(cache.TranslateStreamAsync(Req("hi", model: a), default));
+        await Drain(cache.TranslateStreamAsync(Req("hi", model: b), default));
 
         Assert.Equal(2, inner.CallCount);
     }
@@ -234,9 +238,9 @@ public class CachingTranslationServiceTests
         var inner = new FakeInner(["v"]);
         var cache = Cache(inner, Clock());
 
-        await Drain(cache.TranslateStreamAsync("hi", new TranslationDirection("en", "fa"), "m", default));
-        await Drain(cache.TranslateStreamAsync("hi", new TranslationDirection("en", "de"), "m", default));   // target differs
-        await Drain(cache.TranslateStreamAsync("hi", new TranslationDirection("fa", "en"), "m", default));   // source differs
+        await Drain(cache.TranslateStreamAsync(Req("hi", new TranslationDirection("en", "fa")), default));
+        await Drain(cache.TranslateStreamAsync(Req("hi", new TranslationDirection("en", "de")), default));   // target differs
+        await Drain(cache.TranslateStreamAsync(Req("hi", new TranslationDirection("fa", "en")), default));   // source differs
 
         Assert.Equal(3, inner.CallCount);
     }
@@ -247,10 +251,35 @@ public class CachingTranslationServiceTests
         var inner = new FakeInner(["v"]);
         var cache = Cache(inner, Clock());
 
-        await Drain(cache.TranslateStreamAsync("hi", new TranslationDirection("EN", "FA"), "m", default));
-        await Drain(cache.TranslateStreamAsync("hi", new TranslationDirection("en", "fa"), "m", default));
+        await Drain(cache.TranslateStreamAsync(Req("hi", new TranslationDirection("EN", "FA")), default));
+        await Drain(cache.TranslateStreamAsync(Req("hi", new TranslationDirection("en", "fa")), default));
 
         Assert.Equal(1, inner.CallCount);
+    }
+
+    [Fact]
+    public async Task Different_style_is_a_miss()
+    {
+        var inner = new FakeInner(["v"]);
+        var cache = Cache(inner, Clock());
+
+        await Drain(cache.TranslateStreamAsync(Req("hi", style: TranslationStyle.Original), default));
+        await Drain(cache.TranslateStreamAsync(Req("hi", style: TranslationStyle.Formal), default));
+        await Drain(cache.TranslateStreamAsync(Req("hi", style: TranslationStyle.Formal), default));   // now a hit
+
+        Assert.Equal(2, inner.CallCount);   // Original(1) + Formal(1); the second Formal is cached
+    }
+
+    [Fact]
+    public async Task Different_humanize_flag_is_a_miss()
+    {
+        var inner = new FakeInner(["v"]);
+        var cache = Cache(inner, Clock());
+
+        await Drain(cache.TranslateStreamAsync(Req("hi", humanize: true), default));
+        await Drain(cache.TranslateStreamAsync(Req("hi", humanize: false), default));
+
+        Assert.Equal(2, inner.CallCount);
     }
 
     // ---- TTL ---------------------------------------------------------------------------------
@@ -262,9 +291,9 @@ public class CachingTranslationServiceTests
         var clock = Clock();
         var cache = Cache(inner, clock, ttl: TimeSpan.FromMinutes(5));
 
-        await Drain(cache.TranslateStreamAsync("hi", EnFa, "m", default));
+        await Drain(cache.TranslateStreamAsync(Req("hi"), default));
         clock.Advance(TimeSpan.FromMinutes(5) - TimeSpan.FromSeconds(1));
-        await Drain(cache.TranslateStreamAsync("hi", EnFa, "m", default));
+        await Drain(cache.TranslateStreamAsync(Req("hi"), default));
 
         Assert.Equal(1, inner.CallCount);
     }
@@ -276,9 +305,9 @@ public class CachingTranslationServiceTests
         var clock = Clock();
         var cache = Cache(inner, clock, ttl: TimeSpan.FromMinutes(5));
 
-        await Drain(cache.TranslateStreamAsync("hi", EnFa, "m", default));
+        await Drain(cache.TranslateStreamAsync(Req("hi"), default));
         clock.Advance(TimeSpan.FromMinutes(5) + TimeSpan.FromSeconds(1));
-        await Drain(cache.TranslateStreamAsync("hi", EnFa, "m", default));
+        await Drain(cache.TranslateStreamAsync(Req("hi"), default));
 
         Assert.Equal(2, inner.CallCount);
     }
@@ -291,16 +320,16 @@ public class CachingTranslationServiceTests
         var inner = new FakeInner(["v"]);
         var cache = Cache(inner, Clock(), maxEntries: 2);
 
-        await Drain(cache.TranslateStreamAsync("A", EnFa, "m", default));
-        await Drain(cache.TranslateStreamAsync("B", EnFa, "m", default));
-        await Drain(cache.TranslateStreamAsync("C", EnFa, "m", default));   // evicts A (oldest)
+        await Drain(cache.TranslateStreamAsync(Req("A"), default));
+        await Drain(cache.TranslateStreamAsync(Req("B"), default));
+        await Drain(cache.TranslateStreamAsync(Req("C"), default));   // evicts A (oldest)
 
         // Assert the survivors are hits BEFORE re-fetching A (re-caching A would itself evict B).
-        await Drain(cache.TranslateStreamAsync("B", EnFa, "m", default));   // B -> still cached (hit)
-        await Drain(cache.TranslateStreamAsync("C", EnFa, "m", default));   // C -> still cached (hit)
-        Assert.Equal(3, inner.CallCount);                                   // no new calls from the hits
+        await Drain(cache.TranslateStreamAsync(Req("B"), default));   // B -> still cached (hit)
+        await Drain(cache.TranslateStreamAsync(Req("C"), default));   // C -> still cached (hit)
+        Assert.Equal(3, inner.CallCount);                            // no new calls from the hits
 
-        await Drain(cache.TranslateStreamAsync("A", EnFa, "m", default));   // A -> miss again (was evicted)
+        await Drain(cache.TranslateStreamAsync(Req("A"), default));   // A -> miss again (was evicted)
         Assert.Equal(4, inner.CallCount);
     }
 
@@ -310,13 +339,13 @@ public class CachingTranslationServiceTests
         var inner = new FakeInner(["v"]);
         var cache = Cache(inner, Clock(), maxEntries: 2);
 
-        await Drain(cache.TranslateStreamAsync("A", EnFa, "m", default));
-        await Drain(cache.TranslateStreamAsync("B", EnFa, "m", default));
-        await Drain(cache.TranslateStreamAsync("A", EnFa, "m", default));   // HIT — refreshes A's recency
-        await Drain(cache.TranslateStreamAsync("C", EnFa, "m", default));   // evicts B (now the oldest)
+        await Drain(cache.TranslateStreamAsync(Req("A"), default));
+        await Drain(cache.TranslateStreamAsync(Req("B"), default));
+        await Drain(cache.TranslateStreamAsync(Req("A"), default));   // HIT — refreshes A's recency
+        await Drain(cache.TranslateStreamAsync(Req("C"), default));   // evicts B (now the oldest)
 
-        await Drain(cache.TranslateStreamAsync("A", EnFa, "m", default));   // A -> still cached
-        await Drain(cache.TranslateStreamAsync("B", EnFa, "m", default));   // B -> evicted, miss
+        await Drain(cache.TranslateStreamAsync(Req("A"), default));   // A -> still cached
+        await Drain(cache.TranslateStreamAsync(Req("B"), default));   // B -> evicted, miss
 
         Assert.Equal(4, inner.CallCount);   // A(1) B(1) C(1) + B-again(1); the two A-hits cost nothing
     }
@@ -330,8 +359,8 @@ public class CachingTranslationServiceTests
         var inner = new FakeInner([persian]);
         var cache = Cache(inner, Clock());
 
-        await Drain(cache.TranslateStreamAsync("hello", EnFa, "m", default));
-        var hit = await Drain(cache.TranslateStreamAsync("hello", EnFa, "m", default));
+        await Drain(cache.TranslateStreamAsync(Req("hello"), default));
+        var hit = await Drain(cache.TranslateStreamAsync(Req("hello"), default));
 
         Assert.Single(hit);
         Assert.Equal(persian, hit[0]);   // byte-for-byte, no normalization mangling
@@ -342,10 +371,10 @@ public class CachingTranslationServiceTests
     {
         var inner = new FakeInner(["shared-value"]);
         var cache = Cache(inner, Clock());
-        await Drain(cache.TranslateStreamAsync("k", EnFa, "m", default));   // seed the entry
+        await Drain(cache.TranslateStreamAsync(Req("k"), default));   // seed the entry
 
         var tasks = Enumerable.Range(0, 32)
-            .Select(_ => Task.Run(async () => string.Concat(await Drain(cache.TranslateStreamAsync("k", EnFa, "m", default)))))
+            .Select(_ => Task.Run(async () => string.Concat(await Drain(cache.TranslateStreamAsync(Req("k"), default)))))
             .ToArray();
 
         var results = await Task.WhenAll(tasks);
