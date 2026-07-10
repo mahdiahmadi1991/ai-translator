@@ -1,4 +1,15 @@
-# 1.0.0 (2026-06-30)
+# [1.1.0](https://github.com/mahdiahmadi1991/ai-translator/compare/v1.0.0...v1.1.0) (2026-07-10)
+
+
+### Features
+
+* **compose:** AI rewrite styles + human-sounding translations ([700518d](https://github.com/mahdiahmadi1991/ai-translator/commit/700518d1268bbf73f6c1624409e6c38380e1c417))
+* **selection:** mature read mode — Chromium support, polished pop-up, and caching ([290064e](https://github.com/mahdiahmadi1991/ai-translator/commit/290064e04feb8c3690797c4a9a8070f9fee1ae91))
+* **selection:** read mode — translate selected text anywhere ([8c74b42](https://github.com/mahdiahmadi1991/ai-translator/commit/8c74b421eaaff05a401473ffb3552cdf2cb9e722))
+
+
+
+# [1.0.0](https://github.com/mahdiahmadi1991/ai-translator/compare/a052eb388148bf936f3c2fa16a8995dc3b63ddb7...v1.0.0) (2026-06-30)
 
 
 ### Bug Fixes
