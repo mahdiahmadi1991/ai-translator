@@ -19,8 +19,9 @@ public partial class SelectionBadgeWindow : NonActivatingWindow
     /// <summary>Raised when the user clicks the icon.</summary>
     public event EventHandler? Clicked;
 
-    /// <summary>Show (or move) the icon just below the selection's bottom edge (physical pixels).</summary>
-    public void ShowAt(Rectangle selectionPx)
+    /// <summary>Show (or move) the icon just below the selection, anchored at its reading END — the
+    /// bottom-right for LTR text, bottom-left for RTL — clamped/flipped to stay on-screen (physical px).</summary>
+    public void ShowAt(Rectangle selectionPx, bool isRtl)
     {
         if (!IsVisible)
         {
@@ -34,9 +35,12 @@ public partial class SelectionBadgeWindow : NonActivatingWindow
         int badgeH = (int)Math.Round((ActualHeight > 0 ? ActualHeight : 40) * scale);
         int gap = (int)Math.Round(2 * scale);
 
-        // nestle it just below the selection's bottom-right corner
-        int x = selectionPx.Right - badgeW;
-        int y = selectionPx.Bottom + gap;
+        // Anchor at the end of the last selected line (where the drag finished): right for LTR, left for
+        // RTL. Route through PlaceNearField so a selection near the screen edge flips above / clamps in
+        // instead of landing under the taskbar or off-screen.
+        int anchorX = isRtl ? selectionPx.Left : selectionPx.Right - badgeW;
+        var anchor = new Rectangle(anchorX, selectionPx.Top, badgeW, selectionPx.Height);
+        var (x, y) = ScreenPlacement.PlaceNearField(anchor, badgeW, badgeH, gap);
 
         ScreenPlacement.MoveTopLeft(new WindowInteropHelper(this).Handle, x, y, topmost: true, activate: false);
     }

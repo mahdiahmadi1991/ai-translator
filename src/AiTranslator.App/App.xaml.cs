@@ -8,6 +8,7 @@ using AiTranslator.App.Windows;
 using AiTranslator.Core.Abstractions;
 using AiTranslator.Core.Awareness;
 using AiTranslator.Core.Models;
+using AiTranslator.Core.Translation;
 using AiTranslator.Infrastructure.Awareness;
 using AiTranslator.Infrastructure.Input;
 using H.NotifyIcon;
@@ -315,10 +316,20 @@ public partial class App : Application
     {
         _activeSelection = selection;
         _hasSelection = true;
+
+        // The click that opens the pop-up doesn't clear the source app's selection, so the watcher
+        // re-reads it and would re-show the icon over the pop-up. Suppress it while the pop-up is open.
+        if (_selectionResult?.IsVisible == true)
+        {
+            _selectionBadge?.Hide();
+            return;
+        }
+
         HideBadge();   // while text is selected, the read icon takes precedence over the write badge
         if (selection.Bounds is { } rect)
         {
-            _selectionBadge?.ShowAt(rect);
+            bool isRtl = LanguageDirector.IsRightToLeft(selection.Text);   // anchor at the reading end
+            _selectionBadge?.ShowAt(rect, isRtl);
         }
         else
         {
@@ -347,6 +358,7 @@ public partial class App : Application
         var selection = _selectionWatcher?.CaptureCurrentSelection();
         if (selection is not null)
         {
+            _selectionBadge?.Hide();   // the pop-up takes over from the icon
             OpenSelectionResult(selection, selection.Bounds);
         }
     }
