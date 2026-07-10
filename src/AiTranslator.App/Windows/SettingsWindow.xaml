@@ -130,6 +130,34 @@
                                     </StackPanel>
                                     <ui:ToggleSwitch Grid.Column="1" x:Name="RunAtStartupBox" VerticalAlignment="Center" />
                                 </Grid>
+                                <Separator Margin="0,8" />
+                                <Grid Margin="0,4">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Grid.Column="0" Margin="0,0,12,0">
+                                        <ui:TextBlock Text="{x:Static res:UiStrings.SettingsSelectionTranslator}" />
+                                        <ui:TextBlock FontTypography="Caption" TextWrapping="Wrap"
+                                                      Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                                      Text="{x:Static res:UiStrings.SettingsSelectionTranslatorHint}" />
+                                    </StackPanel>
+                                    <ui:ToggleSwitch Grid.Column="1" x:Name="SelectionTranslatorBox" VerticalAlignment="Center" />
+                                </Grid>
+                                <Separator Margin="0,8" />
+                                <Grid Margin="0,4">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Grid.Column="0" Margin="0,0,12,0">
+                                        <ui:TextBlock Text="{x:Static res:UiStrings.SettingsHumanize}" />
+                                        <ui:TextBlock FontTypography="Caption" TextWrapping="Wrap"
+                                                      Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                                      Text="{x:Static res:UiStrings.SettingsHumanizeHint}" />
+                                    </StackPanel>
+                                    <ui:ToggleSwitch Grid.Column="1" x:Name="HumanizeBox" VerticalAlignment="Center" />
+                                </Grid>
                             </StackPanel>
                         </ui:Card>
 

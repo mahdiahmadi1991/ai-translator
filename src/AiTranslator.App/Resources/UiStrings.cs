@@ -17,7 +17,9 @@ public static class UiStrings
     // Overlay
     public const string OverlayHint = "Type your text, then press Translate (or Ctrl+Enter).";
     public const string OverlayPlaceholder = "Type your text…";
+    public const string OverlayPlaceholderRtl = "متن خود را بنویسید…";   // shown when the source is an RTL language
     public const string OverlayTranslate = "Translate";
+    public const string OverlayStyleLabel = "Style";
     public const string OverlayTranslating = "Translating…";
     public const string OverlayNoApiKey = "Add your OpenAI key in Settings first.";
     public const string OverlayError = "Couldn't translate:";
@@ -31,6 +33,17 @@ public static class UiStrings
 
     // Overlay header
     public const string OverlayClose = "Close";
+
+    // Selection translator (read mode)
+    public const string SelectionTooltip = "Translate the selected text";
+    public const string SelectionCopy = "Copy";
+    public const string SelectionCopied = "Copied";
+    public const string SelectionCopyResult = "Copy the translation";
+    public const string SelectionTargetLang = "Translate to";
+    public const string SelectionTranslating = "Translating…";
+    public const string SelectionEmpty = "No translation was returned.";
+    public const string SettingsSelectionTranslator = "Translate selected text";
+    public const string SettingsSelectionTranslatorHint = "Show a translate icon when you select text anywhere, and translate it in a pop-up.";
 
     // Settings: window + tabs
     public const string SettingsTitle = "AI Translator Settings";
@@ -54,6 +67,8 @@ public static class UiStrings
     public const string SettingsAutoAppearBadgeHint = "Show the badge next to any editable text field, except in blocked apps.";
     public const string SettingsRunAtStartup = "Run at Windows startup";
     public const string SettingsRunAtStartupHint = "Start AI Translator when you sign in to Windows.";
+    public const string SettingsHumanize = "Natural, human-sounding output";
+    public const string SettingsHumanizeHint = "Make translations read like a person wrote them, avoiding stiff, machine-like phrasing.";
 
     // Settings: Account tab
     public const string SettingsApiKey = "OpenAI API key";

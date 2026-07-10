@@ -13,12 +13,16 @@ namespace AiTranslator.Infrastructure.Input;
 /// </summary>
 public sealed class HotkeyService : IHotkeyService
 {
-    private const int HotkeyId = 0xA11;        // app-unique id (valid range 0x0000–0xBFFF)
     private const uint WmHotkey = 0x0312;
     private readonly HWND _hwnd;
+    private readonly int _hotkeyId;            // app-unique id (valid range 0x0000–0xBFFF)
     private bool _registered;
 
-    public HotkeyService(nint messageWindowHandle) => _hwnd = (HWND)messageWindowHandle;
+    public HotkeyService(nint messageWindowHandle, int hotkeyId = 0xA11)
+    {
+        _hwnd = (HWND)messageWindowHandle;
+        _hotkeyId = hotkeyId;
+    }
 
     public event EventHandler? HotkeyPressed;
 
@@ -32,7 +36,7 @@ public sealed class HotkeyService : IHotkeyService
 
         // Core MOD_* values equal Win32 HOT_KEY_MODIFIERS; cast straight through.
         var modifiers = (HOT_KEY_MODIFIERS)combo.Modifiers | HOT_KEY_MODIFIERS.MOD_NOREPEAT;
-        _registered = PInvoke.RegisterHotKey(_hwnd, HotkeyId, modifiers, combo.VirtualKey);
+        _registered = PInvoke.RegisterHotKey(_hwnd, _hotkeyId, modifiers, combo.VirtualKey);
         return _registered;
     }
 
@@ -40,7 +44,7 @@ public sealed class HotkeyService : IHotkeyService
     {
         if (_registered)
         {
-            PInvoke.UnregisterHotKey(_hwnd, HotkeyId);
+            PInvoke.UnregisterHotKey(_hwnd, _hotkeyId);
             _registered = false;
         }
     }
@@ -48,7 +52,7 @@ public sealed class HotkeyService : IHotkeyService
     /// <summary>Call from the host window's WndProc. Returns true if it handled WM_HOTKEY.</summary>
     public bool OnMessage(uint msg, nint wParam)
     {
-        if (msg == WmHotkey && (int)wParam == HotkeyId)
+        if (msg == WmHotkey && (int)wParam == _hotkeyId)
         {
             HotkeyPressed?.Invoke(this, EventArgs.Empty);
             return true;
