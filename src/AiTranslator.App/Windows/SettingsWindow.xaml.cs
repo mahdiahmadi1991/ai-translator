@@ -76,6 +76,7 @@ public partial class SettingsWindow : Window
         AutoDirectionBox.IsChecked = _current.AutoDirection;
         AutoAppearBadgeBox.IsChecked = _current.AutoAppearBadge;
         RunAtStartupBox.IsChecked = _current.RunAtStartup;
+        SelectionTranslatorBox.IsChecked = _current.SelectionTranslator;
 
         _blocklist.Clear();
         foreach (var entry in _current.Blocklist)
@@ -91,7 +92,7 @@ public partial class SettingsWindow : Window
     private void WireAutoSave()
     {
         // Toggles + dropdowns: persist immediately.
-        foreach (var toggle in new[] { AutoDirectionBox, AutoAppearBadgeBox, RunAtStartupBox })
+        foreach (var toggle in new[] { AutoDirectionBox, AutoAppearBadgeBox, RunAtStartupBox, SelectionTranslatorBox })
         {
             toggle.Checked += OnSettingChanged;
             toggle.Unchecked += OnSettingChanged;
@@ -137,6 +138,7 @@ public partial class SettingsWindow : Window
             AutoDirection = AutoDirectionBox.IsChecked == true,
             AutoAppearBadge = AutoAppearBadgeBox.IsChecked == true,
             RunAtStartup = RunAtStartupBox.IsChecked == true,
+            SelectionTranslator = SelectionTranslatorBox.IsChecked == true,
             Blocklist = _blocklist
                 .Select(s => s.Trim())
                 .Where(s => s.Length > 0)

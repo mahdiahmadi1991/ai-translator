@@ -32,6 +32,14 @@ public static class UiStrings
     // Overlay header
     public const string OverlayClose = "Close";
 
+    // Selection translator (read mode)
+    public const string SelectionTooltip = "Translate the selected text";
+    public const string SelectionCopy = "Copy";
+    public const string SelectionCopied = "Copied";
+    public const string SelectionTargetLang = "Translate to";
+    public const string SettingsSelectionTranslator = "Translate selected text";
+    public const string SettingsSelectionTranslatorHint = "Show a translate icon when you select text anywhere, and translate it in a pop-up.";
+
     // Settings: window + tabs
     public const string SettingsTitle = "AI Translator Settings";
     public const string SettingsHeading = "Settings";
