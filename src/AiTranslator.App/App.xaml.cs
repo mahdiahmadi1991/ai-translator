@@ -198,10 +198,11 @@ public partial class App : Application
             _services.GetRequiredService<ITextInjector>(),
             () => _settings);
         overlay.SettingsRequested += (_, _) => OpenSettings();
-        overlay.StyleChanged += style =>
+        overlay.StyleChanged += (exe, style) =>
         {
-            // Persist the box's last-used rewrite style so it survives restarts (ADR-0007).
-            var updated = _settings with { RewriteStyle = style };
+            // Remember the style for THIS app only, so each app keeps its own choice (ADR-0008).
+            // An unidentified app updates the global default instead, so the pick is never lost.
+            var updated = AppStyles.Remember(exe, style, _settings);
             try { _settingsStore.Save(updated); } catch { /* a persist failure must not break translating */ }
             _settings = updated;
         };
@@ -455,7 +456,7 @@ public partial class App : Application
         if (_activeField is { } field)
         {
             _badge?.Hide();   // the box replaces the badge; the badge reappears when the field refocuses
-            ShowOverlay(new FocusTarget(field.WindowHandle), field.FieldRect);
+            ShowOverlay(new FocusTarget(field.WindowHandle, field.ExeName), field.FieldRect);
         }
     }
 

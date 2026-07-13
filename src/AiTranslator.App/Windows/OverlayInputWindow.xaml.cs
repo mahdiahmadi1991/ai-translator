@@ -7,6 +7,7 @@ using System.Windows.Media;
 using System.Windows.Threading;
 using AiTranslator.App.Resources;
 using AiTranslator.Core.Abstractions;
+using AiTranslator.Core.Awareness;
 using AiTranslator.Core.Models;
 using AiTranslator.Core.Translation;
 
@@ -93,8 +94,9 @@ public partial class OverlayInputWindow : Window
     /// <summary>Raised when the user clicks the header settings gear.</summary>
     public event EventHandler? SettingsRequested;
 
-    /// <summary>Raised when the user picks a different rewrite style, so the host can persist it.</summary>
-    public event Action<TranslationStyle>? StyleChanged;
+    /// <summary>Raised when the user picks a different rewrite style, with the exe of the app being
+    /// written into, so the host can remember the choice for that app alone (ADR-0008).</summary>
+    public event Action<string?, TranslationStyle>? StyleChanged;
 
     private void OnSettingsClick(object sender, RoutedEventArgs e) => SettingsRequested?.Invoke(this, EventArgs.Empty);
 
@@ -102,7 +104,7 @@ public partial class OverlayInputWindow : Window
     {
         if (!_loadingStyle && StyleCombo.SelectedItem is RewriteStyleOption option)
         {
-            StyleChanged?.Invoke(option.Style);   // persisted by the host; used on the next translate
+            StyleChanged?.Invoke(_target.ExeName, option.Style);   // remembered per app by the host
         }
     }
 
@@ -144,9 +146,10 @@ public partial class OverlayInputWindow : Window
     {
         _target = target;
 
-        // Reflect the persisted style (without raising StyleChanged for this programmatic set).
+        // Reflect the style remembered for THIS app (falling back to the global default), without
+        // raising StyleChanged for the programmatic set.
         _loadingStyle = true;
-        StyleCombo.SelectedItem = RewriteStyleCatalog.Get(_settingsProvider().RewriteStyle);
+        StyleCombo.SelectedItem = RewriteStyleCatalog.Get(AppStyles.For(_target.ExeName, _settingsProvider()));
         _loadingStyle = false;
 
         if (!IsVisible)
@@ -243,7 +246,9 @@ public partial class OverlayInputWindow : Window
 
         var settings = _settingsProvider();
         var direction = LanguageDirector.Resolve(text, settings.LanguagePair, settings.AutoDirection);
-        var style = StyleCombo.SelectedItem is RewriteStyleOption o ? o.Style : settings.RewriteStyle;
+        var style = StyleCombo.SelectedItem is RewriteStyleOption o
+            ? o.Style
+            : AppStyles.For(_target.ExeName, settings);
         var request = new TranslationRequest(text, direction, settings.Model, style, settings.HumanizeTranslations);
         var sb = new StringBuilder();
         try

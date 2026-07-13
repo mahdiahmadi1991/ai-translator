@@ -137,7 +137,9 @@ See [ADR-0002](decision-records/0002-translation-openai-responses-streaming.md) 
   a `TranslationRequest` carries the text, direction, model, an optional rewrite **style**
   (Original/Professional/Formal/Friendly/Email/Concise/Expand), and a **humanize** flag. `PromptBuilder`
   composes all three into one call; a short-lived LRU cache keys on style + humanize. Read mode (translate
-  a selection) always uses `Original`.
+  a selection) always uses `Original`. The style is remembered **per app**
+  ([ADR-0008](decision-records/0008-per-app-rewrite-style-memory.md)): Teams can stay Formal while the
+  browser stays Friendly, with the global `rewriteStyle` as the default for apps not seen yet.
 
 ## 8. Cross-cutting concerns
 

@@ -17,6 +17,7 @@ Start new ones from [../../templates/adr-template.md](../../templates/adr-templa
 | [0005](0005-secret-storage-credential-manager.md) | API-key storage in Windows Credential Manager | Accepted |
 | [0006](0006-distribution-velopack.md) | Distribution & auto-update via Velopack | Accepted |
 | [0007](0007-rewrite-styles-and-humanizer.md) | AI rewrite styles + human-sounding output (single-call prompt composition) | Accepted |
+| [0008](0008-per-app-rewrite-style-memory.md) | Per-app rewrite-style memory (refines 0007's persistence) | Accepted |
 
 These are grounded in the research summarized in [../overview.md](../overview.md). Where a fact may
 drift over time (model names, SDK versions), the ADR says so and points to the reference docs.

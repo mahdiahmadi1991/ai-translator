@@ -1,7 +1,11 @@
 namespace AiTranslator.Core.Abstractions;
 
-/// <summary>An opaque handle to the field that was focused before our overlay opened.</summary>
-public readonly record struct FocusTarget(nint WindowHandle);
+/// <summary>
+/// The field that was focused before our overlay opened. <paramref name="ExeName"/> identifies the
+/// app it belongs to, so per-app preferences (e.g. the remembered rewrite style) can be resolved for
+/// it; it is null when the app could not be identified.
+/// </summary>
+public readonly record struct FocusTarget(nint WindowHandle, string? ExeName = null);
 
 /// <summary>Captures the foreign window that should receive injected text.</summary>
 public interface IFocusTargetProvider

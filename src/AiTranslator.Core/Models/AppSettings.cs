@@ -23,8 +23,13 @@ public sealed record AppSettings
     /// <summary>Global hotkey that translates the current selection (the guaranteed read-mode path).</summary>
     public string SelectionHotkey { get; init; } = "Ctrl+Alt+S";
 
-    /// <summary>The rewrite style applied when composing in the floating box; persists the last choice (ADR-0007).</summary>
+    /// <summary>The default rewrite style, used for apps that have no remembered choice (ADR-0007).</summary>
     public TranslationStyle RewriteStyle { get; init; } = TranslationStyle.Original;
+
+    /// <summary>Per-exe rewrite style (<c>appStyles</c>): each app remembers the style last used in it
+    /// (ADR-0008). Falls back to <see cref="RewriteStyle"/> for apps not listed here.</summary>
+    public IReadOnlyDictionary<string, TranslationStyle> AppStyles { get; init; }
+        = ReadOnlyDictionary<string, TranslationStyle>.Empty;
 
     /// <summary>Make translations read like a human wrote them (the "humanizer" layer). Opt-out.</summary>
     public bool HumanizeTranslations { get; init; } = true;
