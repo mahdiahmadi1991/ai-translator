@@ -28,6 +28,21 @@ internal static class StaClipboard
     /// board could not be taken — the caller must not then paste, or it would paste the old content.</summary>
     public static Task<bool> TrySetTextAsync(string text) => RunStaAsync(() => TrySetText(text));
 
+    /// <summary>Empty the clipboard. Used to undo our own write when the user had nothing on it: the
+    /// alternative is leaving their private translation on the global board indefinitely.</summary>
+    public static Task<bool> TryClearAsync() => RunStaAsync(() =>
+    {
+        try
+        {
+            Clipboard.Clear();
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    });
+
     /// <summary>Synchronous read, for callers already on an STA thread of their own.</summary>
     public static string? GetText()
     {

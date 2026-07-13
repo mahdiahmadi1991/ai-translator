@@ -14,7 +14,7 @@ canonical docs — it does not repeat them.
 
 | Layer | State | Evidence |
 | --- | --- | --- |
-| `AiTranslator.Core` + `AiTranslator.Tests` (`net10.0`) | **Built, 113/113 tests green** | `dotnet test` |
+| `AiTranslator.Core` + `AiTranslator.Tests` (`net10.0`) | **Built, 116/116 tests green** | `dotnet test` |
 | `AiTranslator.Infrastructure` + `AiTranslator.App` (`net10.0-windows`) | **Built green on Windows (0/0); released (v1.1.0) + auto-update pipeline** | `dotnet build AiTranslator.slnx` + live use |
 | Docs, ADRs (0001–0010), plans | Current | this dashboard |
 

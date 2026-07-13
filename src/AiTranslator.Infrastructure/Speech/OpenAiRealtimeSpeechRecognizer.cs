@@ -38,6 +38,7 @@ public sealed class OpenAiRealtimeSpeechRecognizer : ISpeechRecognizer
     private TaskCompletionSource? _finalArrived;
     private readonly StringBuilder _partial = new();
     private SpeechState _state = SpeechState.Idle;
+    private int _faulted;   // 0/1 — one Failed per session, however many layers notice the same fault
 
     public OpenAiRealtimeSpeechRecognizer(Func<string?> apiKeyProvider, IAudioCapture capture)
     {
@@ -59,6 +60,7 @@ public sealed class OpenAiRealtimeSpeechRecognizer : ISpeechRecognizer
             return;
         }
 
+        _faulted = 0;
         SetState(SpeechState.Connecting);
         try
         {
@@ -175,8 +177,31 @@ public sealed class OpenAiRealtimeSpeechRecognizer : ISpeechRecognizer
     private void OnAudioCaptured(object? sender, ReadOnlyMemory<byte> buffer)
         => _audio?.Writer.TryWrite(buffer.ToArray());
 
-    private void OnCaptureFailed(object? sender, Exception ex)
+    private void OnCaptureFailed(object? sender, Exception ex) => Fault(ex);
+
+    /// <summary>
+    /// A session died on us. Report it <b>once</b> and always wind the session back to
+    /// <see cref="SpeechState.Idle"/>.
+    /// <para>
+    /// This is the rule the whole class hangs on: the UI derives "the box is locked, the microphone is
+    /// live, Translate is disabled" purely from the speech state, so a fault that only logs and leaves
+    /// the state at <see cref="SpeechState.Listening"/> freezes the compose box forever, with the mic
+    /// still open and no error shown. A dropped socket must therefore end the session, not just be
+    /// noticed.
+    /// </para>
+    /// </summary>
+    private void Fault(Exception ex)
     {
+        if (_state is SpeechState.Idle or SpeechState.Stopping)
+        {
+            return;   // already going down (usually our own teardown closing the socket) — not a fault
+        }
+
+        if (Interlocked.Exchange(ref _faulted, 1) != 0)
+        {
+            return;   // another layer already reported this same death
+        }
+
         Failed?.Invoke(this, ex);
         _ = StopAsync();
     }
@@ -201,7 +226,7 @@ public sealed class OpenAiRealtimeSpeechRecognizer : ISpeechRecognizer
         }
         catch (Exception ex)
         {
-            Failed?.Invoke(this, ex);
+            Fault(ex);
         }
     }
 
@@ -237,6 +262,9 @@ public sealed class OpenAiRealtimeSpeechRecognizer : ISpeechRecognizer
                 var result = await socket.ReceiveAsync(buffer, ct).ConfigureAwait(false);
                 if (result.MessageType == WebSocketMessageType.Close)
                 {
+                    // Our own teardown closes the socket too; Fault ignores that (we are Stopping by
+                    // then). This branch is the service hanging up on a live session.
+                    Fault(new InvalidOperationException("The speech service closed the session."));
                     return;
                 }
 
@@ -255,13 +283,15 @@ public sealed class OpenAiRealtimeSpeechRecognizer : ISpeechRecognizer
         {
             // stopping
         }
-        catch (WebSocketException)
+        catch (WebSocketException ex)
         {
-            // the socket was torn down; StopAsync owns the cleanup
+            // The connection died mid-session (Wi-Fi blip, service hang-up). Swallowing this used to
+            // leave the state at Listening for good: the box stayed read-only and the mic stayed open.
+            Fault(new InvalidOperationException("The connection to the speech service dropped.", ex));
         }
         catch (Exception ex)
         {
-            Failed?.Invoke(this, ex);
+            Fault(ex);
         }
     }
 
@@ -295,7 +325,7 @@ public sealed class OpenAiRealtimeSpeechRecognizer : ISpeechRecognizer
                 break;
 
             case "error":
-                Failed?.Invoke(this, new InvalidOperationException(ErrorMessage(doc.RootElement)));
+                Fault(new InvalidOperationException(ErrorMessage(doc.RootElement)));
                 break;
         }
     }

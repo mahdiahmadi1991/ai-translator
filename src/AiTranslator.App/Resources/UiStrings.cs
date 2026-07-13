@@ -26,6 +26,7 @@ public static class UiStrings
     public const string DictationStop = "Stop dictating";
     public const string DictationListening = "Listening…";
     public const string DictationConnecting = "Starting the microphone…";
+    public const string DictationFinishing = "Finishing up…";   // draining audio, waiting for the final transcript
     public const string DictationNoMicrophone = "No microphone is available. Check your microphone and Windows privacy settings.";
     public const string DictationFailed = "Dictation stopped:";
 

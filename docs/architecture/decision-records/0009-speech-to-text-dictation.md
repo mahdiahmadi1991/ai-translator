@@ -77,6 +77,35 @@ Dictate through a **Realtime transcription session**, streaming microphone audio
 - **Cost is time-based** (~$0.017/min of listening), unlike translation's per-token cost.
 - Microphone access can be blocked by Windows privacy settings or absent entirely. That is surfaced as
   a clear message, never a crash.
+
+## Addendum (2026-07-13): a dead session must end the session
+
+A pre-release audit found that the recognizer could report a fault without *ending* it. `case "error"`,
+a dropped `WebSocketException`, and a server close frame each notified `Failed` (or nothing at all) while
+leaving the state at `Listening`.
+
+That is not a cosmetic slip. The compose box derives its entire enabled/disabled state from the speech
+state, so a session stuck at `Listening` means a box that is **read-only forever**, with `Translate`
+disabled, the microphone still open, and the status still cheerfully reading "Listening…". Reproduced by
+provoking a real server-side rejection on a live socket: the session sat at `Listening` until the process
+tore it down.
+
+Every fault now goes through one `Fault` path that reports once and always winds the session back to
+`Idle`. Re-verified against the live API: `Connecting -> Listening -> Stopping -> Idle`, with the error
+shown to the user and the box unlocked.
+
+Three related UI rules fell out of the same audit:
+
+- **`Stopping` is a state the user can see.** Draining the audio and waiting for the final transcript
+  takes seconds; the box used to sit locked with no sign the stop had registered. It now says "Finishing
+  up…", and the mic is disabled for that window so a second click cannot re-enter the stop and
+  proof-read twice.
+- **An error outranks a progress note.** Recognizer state changes are marshalled onto the dispatcher, so
+  they landed *after* the synchronous `catch` that reported a failure and silently overwrote it. Clicking
+  the mic with no API key therefore did nothing at all, visibly. Progress notes now refuse to overwrite an
+  error, and the `Idle` handler will not clear one.
+- **Stopping is idempotent.** `Esc`, the mic button, and the auto-hide path all stop dictation; a stop
+  already in flight absorbs the others.
 - Long, unbroken dictation is bounded by the model's 16k context. Messaging-length speech is far
   inside it; a very long monologue would need chunking, which is out of scope until it is a real problem.
 

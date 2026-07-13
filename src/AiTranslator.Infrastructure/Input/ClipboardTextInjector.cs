@@ -9,12 +9,15 @@ namespace AiTranslator.Infrastructure.Input;
 /// Appends text to a target field via clipboard paste (ADR-0004): save clipboard, set our text, focus
 /// the target, Ctrl+End, Ctrl+V, then put the user's clipboard back.
 /// <para>
-/// <b>Three hazards, all handled here.</b> The keystrokes must not be sent until the target really has
+/// <b>Four hazards, all handled here.</b> The keystrokes must not be sent until the target really has
 /// the foreground, or they land in whatever window still has focus. The target reads the clipboard when
 /// <i>it</i> processes the paste, which can be far later than <c>SendInput</c> returns, so the restore
-/// waits generously and is skipped if anything else has taken the board meanwhile. And every clipboard
-/// call goes through <see cref="StaClipboard"/> rather than running inline: done on the WPF UI thread it
-/// blocks that thread for as long as the board is contended, which froze the compose box for seconds.
+/// waits generously and is skipped if anything else has taken the board meanwhile. Once our text is on
+/// the board, <b>every</b> exit path must put the user's clipboard back, including the failure paths:
+/// otherwise a private translation is left on the global clipboard and whatever the user had copied is
+/// destroyed. And every clipboard call goes through <see cref="StaClipboard"/> rather than running
+/// inline: done on the WPF UI thread it blocks that thread for as long as the board is contended, which
+/// froze the compose box for seconds.
 /// </para>
 /// </summary>
 public sealed class ClipboardTextInjector : ITextInjector
@@ -35,37 +38,64 @@ public sealed class ClipboardTextInjector : ITextInjector
         // NEVER paste on trust. Another app can hold the clipboard open (a clipboard manager, the
         // target itself), in which case the set silently fails and the OLD content is still there.
         // Sending Ctrl+V then injects that old content, which is exactly how a user's own source text
-        // ended up in the chat instead of the translation. Verify, or refuse to paste.
+        // ended up in the chat instead of the translation. Verify, or refuse to paste. Nothing has been
+        // written when this throws, so there is nothing to undo.
         if (!await StaClipboard.TrySetTextAsync(text).WaitAsync(ct).ConfigureAwait(true))
         {
             throw new TextInjectionException("The clipboard is held by another app.");
         }
 
-        // Send the keystrokes only once the target really has the foreground, so they cannot land in
-        // the window we are leaving.
-        await FocusTargetWindowAsync((HWND)target.WindowHandle, ct).ConfigureAwait(true);
-        await Task.Delay(SettleAfterActivationMs, ct).ConfigureAwait(true);
+        // From here the board holds the user's translation, so EVERY exit has to put it back. Failing to
+        // do that would leave a private message on the global clipboard for any process to read, and
+        // would destroy whatever the user had copied (which may well be a password).
+        try
+        {
+            // Send the keystrokes only once the target really has the foreground, so they cannot land in
+            // the window we are leaving.
+            await FocusTargetWindowAsync((HWND)target.WindowHandle, ct).ConfigureAwait(true);
+            await Task.Delay(SettleAfterActivationMs, ct).ConfigureAwait(true);
 
-        SendCtrl(VIRTUAL_KEY.VK_END);   // caret to end — append, do NOT select-all/replace
-        SendCtrl(VIRTUAL_KEY.VK_V);     // paste
+            SendCtrl(VIRTUAL_KEY.VK_END);   // caret to end — append, do NOT select-all/replace
+            SendCtrl(VIRTUAL_KEY.VK_V);     // paste
+        }
+        catch
+        {
+            // Nothing was pasted, so we do not owe the target any settling time: undo our write at once,
+            // before letting the failure surface.
+            await RestoreClipboardAsync(previous, ours: text).ConfigureAwait(true);
+            throw;
+        }
+
+        // Deliberately not awaited, and deliberately never resumed on the UI thread: the caller can
+        // dismiss the box at once, and the board goes back once the target has certainly consumed it.
+        _ = DelayedRestoreAsync(previous, ours: text);
+    }
+
+    private static async Task DelayedRestoreAsync(string? previous, string ours)
+    {
+        await Task.Delay(ClipboardRestoreDelayMs).ConfigureAwait(false);
+        await RestoreClipboardAsync(previous, ours).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Undo our write: put <paramref name="previous"/> back, or empty the board if the user had nothing
+    /// on it. Skipped entirely if our text is no longer there, because then something else owns the
+    /// clipboard and clobbering it would be the very bug we are avoiding.
+    /// </summary>
+    private static async Task RestoreClipboardAsync(string? previous, string ours)
+    {
+        if (await StaClipboard.GetTextAsync().ConfigureAwait(false) != ours)
+        {
+            return;
+        }
 
         if (previous is not null)
         {
-            // Deliberately not awaited, and deliberately never resumed on the UI thread: the caller can
-            // dismiss the box at once, and the board goes back once the target has certainly consumed it.
-            _ = RestorePreviousClipboardAsync(previous, ours: text);
-        }
-    }
-
-    /// <summary>Put the user's clipboard back, but only once the target has had time to paste, and only
-    /// if our text is still on the board (otherwise something else owns it and we must not clobber it).</summary>
-    private static async Task RestorePreviousClipboardAsync(string previous, string ours)
-    {
-        await Task.Delay(ClipboardRestoreDelayMs).ConfigureAwait(false);
-
-        if (await StaClipboard.GetTextAsync().ConfigureAwait(false) == ours)
-        {
             await StaClipboard.TrySetTextAsync(previous).ConfigureAwait(false);
+        }
+        else
+        {
+            await StaClipboard.TryClearAsync().ConfigureAwait(false);
         }
     }
 
