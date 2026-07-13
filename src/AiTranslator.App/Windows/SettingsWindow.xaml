@@ -172,6 +172,20 @@
                                     </StackPanel>
                                     <ui:ToggleSwitch Grid.Column="1" x:Name="DictationBox" VerticalAlignment="Center" />
                                 </Grid>
+                                <Separator Margin="0,8" />
+                                <Grid Margin="0,4">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Grid.Column="0" Margin="0,0,12,0">
+                                        <ui:TextBlock Text="{x:Static res:UiStrings.SettingsAutoCorrect}" />
+                                        <ui:TextBlock FontTypography="Caption" TextWrapping="Wrap"
+                                                      Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                                      Text="{x:Static res:UiStrings.SettingsAutoCorrectHint}" />
+                                    </StackPanel>
+                                    <ui:ToggleSwitch Grid.Column="1" x:Name="AutoCorrectBox" VerticalAlignment="Center" />
+                                </Grid>
                             </StackPanel>
                         </ui:Card>
 

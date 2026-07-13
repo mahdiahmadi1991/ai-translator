@@ -197,6 +197,7 @@ public partial class App : Application
             _services.GetRequiredService<ITranslationService>(),
             _services.GetRequiredService<ITextInjector>(),
             _services.GetRequiredService<ISpeechRecognizer>(),
+            _services.GetRequiredService<ITextCorrector>(),
             () => _settings);
         overlay.SettingsRequested += (_, _) => OpenSettings();
         overlay.StyleChanged += (exe, style) =>

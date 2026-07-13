@@ -79,6 +79,7 @@ public partial class SettingsWindow : Window
         SelectionTranslatorBox.IsChecked = _current.SelectionTranslator;
         HumanizeBox.IsChecked = _current.HumanizeTranslations;
         DictationBox.IsChecked = _current.Dictation;
+        AutoCorrectBox.IsChecked = _current.AutoCorrect;
 
         _blocklist.Clear();
         foreach (var entry in _current.Blocklist)
@@ -94,7 +95,7 @@ public partial class SettingsWindow : Window
     private void WireAutoSave()
     {
         // Toggles + dropdowns: persist immediately.
-        foreach (var toggle in new[] { AutoDirectionBox, AutoAppearBadgeBox, RunAtStartupBox, SelectionTranslatorBox, HumanizeBox, DictationBox })
+        foreach (var toggle in new[] { AutoDirectionBox, AutoAppearBadgeBox, RunAtStartupBox, SelectionTranslatorBox, HumanizeBox, DictationBox, AutoCorrectBox })
         {
             toggle.Checked += OnSettingChanged;
             toggle.Unchecked += OnSettingChanged;
@@ -143,6 +144,7 @@ public partial class SettingsWindow : Window
             SelectionTranslator = SelectionTranslatorBox.IsChecked == true,
             HumanizeTranslations = HumanizeBox.IsChecked == true,
             Dictation = DictationBox.IsChecked == true,
+            AutoCorrect = AutoCorrectBox.IsChecked == true,
             Blocklist = _blocklist
                 .Select(s => s.Trim())
                 .Where(s => s.Length > 0)

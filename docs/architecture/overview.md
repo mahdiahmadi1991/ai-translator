@@ -146,6 +146,11 @@ See [ADR-0002](decision-records/0002-translation-openai-responses-streaming.md) 
   the user is still speaking. A pure `DictationBuffer` appends the live text after whatever was already
   typed. Audio leaves the machine only between an explicit start and stop, and `dictation` turns the
   feature off entirely.
+- **Auto-correct** ([ADR-0010](decision-records/0010-auto-correct-pass.md)): a short `ITextCorrector`
+  pass proof-reads the box before it is translated, repairing typos and words dictation misheard and
+  writing transliterated English terms back in Latin script. It corrects spelling, never style, so it
+  cannot fight the rewrite styles. Best-effort: a failure keeps the user's text and never blocks the
+  translation.
 
 ## 8. Cross-cutting concerns
 

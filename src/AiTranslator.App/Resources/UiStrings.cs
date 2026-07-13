@@ -28,6 +28,9 @@ public static class UiStrings
     public const string DictationConnecting = "Starting the microphone…";
     public const string DictationNoMicrophone = "No microphone is available. Check your microphone and Windows privacy settings.";
     public const string DictationFailed = "Dictation stopped:";
+
+    // Auto-correct
+    public const string Correcting = "Correcting…";
     public const string OverlayTranslating = "Translating…";
     public const string OverlayNoApiKey = "Add your OpenAI key in Settings first.";
     public const string OverlayError = "Couldn't translate:";
@@ -79,6 +82,8 @@ public static class UiStrings
     public const string SettingsHumanizeHint = "Make translations read like a person wrote them, avoiding stiff, machine-like phrasing.";
     public const string SettingsDictation = "Dictation (speech to text)";
     public const string SettingsDictationHint = "Show a microphone in the box so you can speak instead of typing. Audio is sent to OpenAI only while you are dictating.";
+    public const string SettingsAutoCorrect = "Auto-correct";
+    public const string SettingsAutoCorrectHint = "Proof-read the box before translating: fix typos, repair words dictation misheard, and write English terms in Latin script. It corrects spelling, never your style.";
 
     // Settings: Account tab
     public const string SettingsApiKey = "OpenAI API key";

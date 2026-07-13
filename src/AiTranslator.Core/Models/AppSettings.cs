@@ -41,6 +41,10 @@ public sealed record AppSettings
     /// <summary>The speech-to-text model; configurable because model names drift, like <see cref="Model"/>.</summary>
     public string SpeechModel { get; init; } = "gpt-realtime-whisper";
 
+    /// <summary>Proof-read the compose box before translating: fix typos, repair words dictation
+    /// misheard, and restore transliterated English terms (ADR-0010). Opt-out.</summary>
+    public bool AutoCorrect { get; init; } = true;
+
     // Opt-out model: the badge appears anywhere an editable field is focused, except apps whose exe
     // matches a Blocklist "moniker" (regex against the process name — see ExeName). Empty = everywhere.
     public IReadOnlyList<string> Blocklist { get; init; } = [];

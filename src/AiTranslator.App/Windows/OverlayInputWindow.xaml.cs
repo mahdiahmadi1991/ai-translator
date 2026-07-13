@@ -28,6 +28,7 @@ public partial class OverlayInputWindow : Window
     private readonly ITranslationService _translator;
     private readonly ITextInjector _injector;
     private readonly ISpeechRecognizer _speech;
+    private readonly ITextCorrector _corrector;
     private readonly Func<AppSettings> _settingsProvider;
     private readonly DispatcherTimer _visibilityWatch;
     private readonly DictationBuffer _dictation = new();
@@ -37,16 +38,18 @@ public partial class OverlayInputWindow : Window
     private bool _busy;
     private bool _loadingStyle;   // suppress StyleChanged while we set the combo programmatically
     private SpeechState _speechState = SpeechState.Idle;
+    private string _lastCorrected = string.Empty;   // skip re-correcting text we already proof-read
 
     public OverlayInputWindow(
         IFocusTargetProvider focus, ITranslationService translator, ITextInjector injector,
-        ISpeechRecognizer speech, Func<AppSettings> settingsProvider)
+        ISpeechRecognizer speech, ITextCorrector corrector, Func<AppSettings> settingsProvider)
     {
         InitializeComponent();
         _focus = focus;
         _translator = translator;
         _injector = injector;
         _speech = speech;
+        _corrector = corrector;
         _settingsProvider = settingsProvider;
 
         StyleCombo.ItemsSource = RewriteStyleCatalog.All;
@@ -188,6 +191,59 @@ public partial class OverlayInputWindow : Window
         finally
         {
             ShowDictated(_dictation.Flush());   // keep a partial that never got a final
+        }
+
+        // Speech-to-text mishears words and writes English terms in the local script, so proof-read
+        // what it produced (ADR-0010). Nothing follows this to report a failure, so surface one here.
+        await AutoCorrectAsync(surfaceErrors: true);
+    }
+
+    // ---- Auto-correct (ADR-0010) --------------------------------------------------------------
+
+    /// <summary>
+    /// Proof-read the box: fix typos, repair words dictation misheard, and restore transliterated
+    /// English terms. Best-effort by design: if it fails, the user's text is kept exactly as it was.
+    /// </summary>
+    private async Task AutoCorrectAsync(bool surfaceErrors)
+    {
+        var settings = _settingsProvider();
+        var text = Input.Text;
+
+        if (!settings.AutoCorrect || string.IsNullOrWhiteSpace(text) || text == _lastCorrected)
+        {
+            return;
+        }
+
+        bool wasReadOnly = Input.IsReadOnly;
+        Input.IsReadOnly = true;
+        ShowStatus(UiStrings.Correcting, isError: false);
+        try
+        {
+            var corrected = await _corrector.CorrectAsync(text, settings.Model);
+            if (!string.IsNullOrWhiteSpace(corrected) && corrected != text)
+            {
+                Input.Text = corrected;
+                Input.CaretIndex = Input.Text.Length;
+                Input.ScrollToEnd();
+            }
+
+            _lastCorrected = Input.Text;
+            ClearStatus();
+        }
+        catch (Exception ex)
+        {
+            // A correction failure must never cost the user their text, and must never block the
+            // translation that may follow. On the translate path the translation call reports the same
+            // fault (no key, no network) a moment later, so it is not duplicated here.
+            ClearStatus();
+            if (surfaceErrors)
+            {
+                ShowStatus($"{UiStrings.OverlayError} {ex.Message}");
+            }
+        }
+        finally
+        {
+            Input.IsReadOnly = wasReadOnly;
         }
     }
 
@@ -349,8 +405,7 @@ public partial class OverlayInputWindow : Window
             return;   // finish dictating first; the text is still being written
         }
 
-        var text = Input.Text;
-        if (string.IsNullOrWhiteSpace(text))
+        if (string.IsNullOrWhiteSpace(Input.Text))
         {
             return;
         }
@@ -364,6 +419,13 @@ public partial class OverlayInputWindow : Window
         Busy.Visibility = Visibility.Visible;
         ClearStatus();
         await Dispatcher.Yield(DispatcherPriority.Background);
+
+        // Proof-read first: typing has typos too, so this runs on whatever is in the box, not only on
+        // dictated text (ADR-0010). It is skipped when the text was already corrected, so pressing
+        // Translate straight after dictating costs nothing extra.
+        await AutoCorrectAsync(surfaceErrors: false);
+
+        var text = Input.Text;   // captured AFTER correction, so we translate what the user can see
 
         _inflight?.Cancel();
         _inflight?.Dispose();
