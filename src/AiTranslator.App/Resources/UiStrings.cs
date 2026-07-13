@@ -20,9 +20,22 @@ public static class UiStrings
     public const string OverlayPlaceholderRtl = "متن خود را بنویسید…";   // shown when the source is an RTL language
     public const string OverlayTranslate = "Translate";
     public const string OverlayStyleLabel = "Style";
+
+    // Dictation (speech to text)
+    public const string DictationStart = "Dictate (speak your text)";
+    public const string DictationStop = "Stop dictating";
+    public const string DictationListening = "Listening…";
+    public const string DictationConnecting = "Starting the microphone…";
+    public const string DictationFinishing = "Finishing up…";   // draining audio, waiting for the final transcript
+    public const string DictationNoMicrophone = "No microphone is available. Check your microphone and Windows privacy settings.";
+    public const string DictationFailed = "Dictation stopped:";
+
+    // Auto-correct
+    public const string Correcting = "Correcting…";
     public const string OverlayTranslating = "Translating…";
     public const string OverlayNoApiKey = "Add your OpenAI key in Settings first.";
     public const string OverlayError = "Couldn't translate:";
+    public const string OverlayInjectFailed = "Couldn't insert the translation — the clipboard was busy. Your text is still here; press Translate again.";
 
     // Badge
     public const string BadgeTooltip = "Click to translate into this field";
@@ -69,6 +82,10 @@ public static class UiStrings
     public const string SettingsRunAtStartupHint = "Start AI Translator when you sign in to Windows.";
     public const string SettingsHumanize = "Natural, human-sounding output";
     public const string SettingsHumanizeHint = "Make translations read like a person wrote them, avoiding stiff, machine-like phrasing.";
+    public const string SettingsDictation = "Dictation (speech to text)";
+    public const string SettingsDictationHint = "Show a microphone in the box so you can speak instead of typing. Audio is sent to OpenAI only while you are dictating.";
+    public const string SettingsAutoCorrect = "Auto-correct";
+    public const string SettingsAutoCorrectHint = "Fix typos, repair words dictation misheard, and write English terms in Latin script. It corrects spelling, never your style.";
 
     // Settings: Account tab
     public const string SettingsApiKey = "OpenAI API key";

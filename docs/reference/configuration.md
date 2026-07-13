@@ -23,8 +23,12 @@ the canonical schema; update it in the same change as any settings-shape change.
 | `autoAppearBadge` | bool | `true` | Show the badge automatically in editable fields (everywhere except the blocklist) |
 | `selectionTranslator` | bool | `true` | Read mode: show a translate icon when text is selected anywhere ([ADR-0007](../architecture/decision-records/0007-rewrite-styles-and-humanizer.md) is compose-mode; read mode is the selection feature) |
 | `selectionHotkey` | string | `"Ctrl+Alt+S"` | Global shortcut that translates the current selection (the guaranteed read-mode path) |
-| `rewriteStyle` | enum | `"Original"` | Last-used compose-box style: `Original` \| `Professional` \| `Formal` \| `Friendly` \| `Email` \| `Concise` \| `Expand` (persisted; [ADR-0007](../architecture/decision-records/0007-rewrite-styles-and-humanizer.md)) |
+| `rewriteStyle` | enum | `"Original"` | **Default** compose-box style, used for apps with no remembered choice: `Original` \| `Professional` \| `Formal` \| `Friendly` \| `Email` \| `Concise` \| `Expand` ([ADR-0007](../architecture/decision-records/0007-rewrite-styles-and-humanizer.md)) |
+| `appStyles` | map | `{}` | Per-exe rewrite style — each app remembers the style last used in it, e.g. `{ "ms-teams.exe": "Formal", "chrome.exe": "Friendly" }`. Falls back to `rewriteStyle` ([ADR-0008](../architecture/decision-records/0008-per-app-rewrite-style-memory.md)) |
 | `humanizeTranslations` | bool | `true` | Make translations read like a person wrote them (the "humanizer" prompt layer); applies to both read and compose modes |
+| `dictation` | bool | `true` | Show the microphone in the compose box so you can speak instead of typing. Audio is streamed to OpenAI **only** between an explicit start and stop ([ADR-0009](../architecture/decision-records/0009-speech-to-text-dictation.md)) |
+| `speechModel` | string | `"gpt-realtime-whisper"` | Speech-to-text model; configurable for the same reason `model` is (names drift). See [openai-models.md](openai-models.md) |
+| `autoCorrect` | bool | `true` | Fix typos, repair words dictation misheard, and write English terms in Latin script. Runs as a proof-read of the box after dictation, and rides inside the translation prompt otherwise (no extra call). Corrects spelling, never style ([ADR-0010](../architecture/decision-records/0010-auto-correct-pass.md)) |
 | `blocklist` | string[] | `[]` | Regex **monikers** (matched case-insensitively against the foreground process name) where the badge is suppressed; empty ⇒ it appears everywhere |
 | `appOffsets` | map | `{}` | Per-exe badge offset calibration `{ "exe": {"corner":1,"dx":64,"dy":-6} }` |
 | `theme` | enum | `"system"` | `system` \| `light` \| `dark` |

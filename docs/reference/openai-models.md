@@ -67,8 +67,26 @@ leading/trailing quotes the model might add.
 > load-bearing, so a change to them should be re-checked against real output (Concise clearly shortens,
 > Expand clearly lengthens, Formal/Friendly/Email shift register, and none leak the source language).
 
+## Speech to text (dictation)
+
+Dictation uses a **Realtime transcription session**, not the file endpoint, because the text has to
+appear while the user is still speaking ([ADR-0009](../architecture/decision-records/0009-speech-to-text-dictation.md)).
+
+| Model | Route | $/min | Notes |
+| --- | --- | --- | --- |
+| `gpt-realtime-whisper` | **Default** — Realtime WebSocket, `session.type = "transcription"` | ~0.017 | Streams transcript deltas *while* audio is appended; `delay` (minimal…xhigh) trades latency for accuracy |
+| `gpt-4o-mini-transcribe` | `/v1/audio/transcriptions` (file, optional `stream=true`) | ~0.003 | Cheaper, but the text only lands after the clip is uploaded — not live |
+| `gpt-4o-transcribe` | `/v1/audio/transcriptions` | ~0.006 | Higher accuracy file transcription |
+
+- Audio is **24 kHz, 16-bit, mono PCM**, appended as `input_audio_buffer.append`; the buffer is
+  committed once, on stop, which yields the cleaner punctuated final transcript.
+- `language` is sent explicitly (the configured primary language); it measurably improves accuracy.
+- Persian is supported and, in our own testing, transcribes essentially verbatim.
+- `speechModel` is the configurable setting ([configuration.md](configuration.md)).
+
 ## Sources
 
-- OpenAI .NET SDK — https://github.com/openai/openai-dotnet
-- Pricing — https://developers.openai.com/api/docs/pricing
-- Streaming responses — https://developers.openai.com/api/docs/guides/streaming-responses
+- [OpenAI .NET SDK](https://github.com/openai/openai-dotnet)
+- [Pricing](https://developers.openai.com/api/docs/pricing)
+- [Streaming responses](https://developers.openai.com/api/docs/guides/streaming-responses)
+- [Realtime transcription](https://developers.openai.com/api/docs/guides/realtime-transcription)

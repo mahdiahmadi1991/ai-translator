@@ -24,9 +24,11 @@ just routes you there.
 ## Project status
 
 **Development is native on Windows; M1 builds green and M2 awareness machinery has landed.** The
-`src/` solution builds **0/0 on Windows** with **40/40 tests green**; the app launches. M1's remaining
-gate is the manual runtime acceptance test; M2 (badge auto-appearance) is built and needs per-app
-verification. Full picture and next steps: [status.md](status.md).
+`src/` solution builds and its tests pass; the app launches. M1's remaining gate is the manual runtime
+acceptance test; M2 (badge auto-appearance) is built and needs per-app verification.
+
+[status.md](status.md) is the single source of truth for what is built, what is verified, and the test
+count. Do not restate those facts here; they go stale.
 
 ## Conventions for this docs tree
 

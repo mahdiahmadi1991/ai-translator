@@ -85,7 +85,7 @@ interfaces so the core logic is unit-testable without a live desktop.
 
 ## 5. Primary data flow
 
-```
+```text
 focus change ─▶ FocusWatcher ─▶ TargetResolver ─▶ (editable? allowlisted?) ─▶ BadgeWindow shows
                                                             │
 user clicks badge / presses hotkey ─────────────────────────┘
@@ -137,7 +137,22 @@ See [ADR-0002](decision-records/0002-translation-openai-responses-streaming.md) 
   a `TranslationRequest` carries the text, direction, model, an optional rewrite **style**
   (Original/Professional/Formal/Friendly/Email/Concise/Expand), and a **humanize** flag. `PromptBuilder`
   composes all three into one call; a short-lived LRU cache keys on style + humanize. Read mode (translate
-  a selection) always uses `Original`.
+  a selection) always uses `Original`. The style is remembered **per app**
+  ([ADR-0008](decision-records/0008-per-app-rewrite-style-memory.md)): Teams can stay Formal while the
+  browser stays Friendly, with the global `rewriteStyle` as the default for apps not seen yet.
+- **Dictation** ([ADR-0009](decision-records/0009-speech-to-text-dictation.md)): the compose box has a
+  mic. Audio is captured as 24 kHz mono PCM (NAudio, behind `IAudioCapture`) and streamed to an OpenAI
+  **Realtime transcription session** (`gpt-realtime-whisper`), which returns transcript deltas *while*
+  the user is still speaking. A pure `DictationBuffer` appends the live text after whatever was already
+  typed. Audio leaves the machine only between an explicit start and stop, and `dictation` turns the
+  feature off entirely.
+- **Auto-correct** ([ADR-0010](decision-records/0010-auto-correct-pass.md)): typos, words dictation
+  mishears, and English terms written in the local script are all repaired before the text is sent. After
+  dictation an `ITextCorrector` pass proof-reads the box, so the user reads and can edit what the
+  microphone heard; the box stays editable while it runs, and an edit wins over the correction. On the
+  translate path the repair rides **inside** the translation prompt, so it costs no extra round-trip. It
+  corrects spelling, never style, so it cannot fight the rewrite styles. Best-effort throughout: a
+  failure keeps the user's text and never blocks the translation.
 
 ## 8. Cross-cutting concerns
 
