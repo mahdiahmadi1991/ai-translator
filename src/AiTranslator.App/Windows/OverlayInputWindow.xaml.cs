@@ -39,6 +39,7 @@ public partial class OverlayInputWindow : Window
     private bool _loadingStyle;   // suppress StyleChanged while we set the combo programmatically
     private SpeechState _speechState = SpeechState.Idle;
     private string _lastCorrected = string.Empty;   // skip re-correcting text we already proof-read
+    private Task? _correcting;                      // the proof-read in flight, so we never run two
 
     public OverlayInputWindow(
         IFocusTargetProvider focus, ITranslationService translator, ITextInjector injector,
@@ -195,7 +196,8 @@ public partial class OverlayInputWindow : Window
 
         // Speech-to-text mishears words and writes English terms in the local script, so proof-read
         // what it produced (ADR-0010). Nothing follows this to report a failure, so surface one here.
-        await AutoCorrectAsync(surfaceErrors: true);
+        _correcting = AutoCorrectAsync(surfaceErrors: true);
+        await _correcting;
     }
 
     // ---- Auto-correct (ADR-0010) --------------------------------------------------------------
@@ -203,27 +205,36 @@ public partial class OverlayInputWindow : Window
     /// <summary>
     /// Proof-read the box: fix typos, repair words dictation misheard, and restore transliterated
     /// English terms. Best-effort by design: if it fails, the user's text is kept exactly as it was.
+    /// <para>
+    /// The box stays <b>editable</b> throughout. A model call takes seconds, and the first thing anyone
+    /// does after dictating is reach for the word the recognizer got wrong — so freezing the box until
+    /// the proof-read returns reads as "the app is stuck". If the text changes while we are away, the
+    /// user has taken over: their version wins and the correction is dropped rather than overwriting it.
+    /// </para>
     /// </summary>
     private async Task AutoCorrectAsync(bool surfaceErrors)
     {
         var settings = _settingsProvider();
         var text = Input.Text;
 
-        ComposeLog.Write($"autocorrect: enabled={settings.AutoCorrect} readOnly={Input.IsReadOnly} " +
-                         $"len={text.Length} alreadyCorrected={text == _lastCorrected}");
-
         if (!settings.AutoCorrect || string.IsNullOrWhiteSpace(text) || text == _lastCorrected)
         {
             return;
         }
 
-        bool wasReadOnly = Input.IsReadOnly;
-        Input.IsReadOnly = true;
         ShowStatus(UiStrings.Correcting, isError: false);
         try
         {
             var corrected = await _corrector.CorrectAsync(text, settings.Model);
-            ComposeLog.Write($"autocorrect done: in='{ComposeLog.Peek(text)}' out='{ComposeLog.Peek(corrected)}'");
+            ComposeLog.Write($"autocorrect: in='{ComposeLog.Peek(text)}' out='{ComposeLog.Peek(corrected)}'");
+
+            if (Input.Text != text)
+            {
+                ComposeLog.Write("autocorrect: DISCARDED — the user edited the text while we proof-read");
+                ClearStatus();
+                return;
+            }
+
             if (!string.IsNullOrWhiteSpace(corrected) && corrected != text)
             {
                 Input.Text = corrected;
@@ -244,10 +255,6 @@ public partial class OverlayInputWindow : Window
             {
                 ShowStatus($"{UiStrings.OverlayError} {ex.Message}");
             }
-        }
-        finally
-        {
-            Input.IsReadOnly = wasReadOnly;
         }
     }
 
@@ -429,12 +436,15 @@ public partial class OverlayInputWindow : Window
         ClearStatus();
         await Dispatcher.Yield(DispatcherPriority.Background);
 
-        // Proof-read first: typing has typos too, so this runs on whatever is in the box, not only on
-        // dictated text (ADR-0010). It is skipped when the text was already corrected, so pressing
-        // Translate straight after dictating costs nothing extra.
-        await AutoCorrectAsync(surfaceErrors: false);
+        // If the post-dictation proof-read is still running, join it — the user is about to send text
+        // they can see, so it must be the corrected version. We never START a proof-read here: typos are
+        // handled inside the translation call itself (below), which costs one round-trip instead of two.
+        if (_correcting is { IsCompleted: false } running)
+        {
+            await running;
+        }
 
-        var text = Input.Text;   // captured AFTER correction, so we translate what the user can see
+        var text = Input.Text;   // captured AFTER any correction, so we translate what the user can see
 
         _inflight?.Cancel();
         _inflight?.Dispose();
@@ -446,7 +456,13 @@ public partial class OverlayInputWindow : Window
         var style = StyleCombo.SelectedItem is RewriteStyleOption o
             ? o.Style
             : AppStyles.For(_target.ExeName, settings);
-        var request = new TranslationRequest(text, direction, settings.Model, style, settings.HumanizeTranslations);
+
+        // Auto-correct rides along with the translation rather than running as its own pass (ADR-0010):
+        // the source box is cleared on success and never read again, so proof-reading it separately only
+        // bought the user a second wait. The translator reads through the typos instead.
+        var request = new TranslationRequest(
+            text, direction, settings.Model, style, settings.HumanizeTranslations,
+            CorrectSource: settings.AutoCorrect);
         var sb = new StringBuilder();
         try
         {

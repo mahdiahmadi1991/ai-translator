@@ -12,8 +12,9 @@ public class CachingTranslationServiceTests
 
     private static TranslationRequest Req(
         string text, TranslationDirection? dir = null, string model = "m",
-        TranslationStyle style = TranslationStyle.Original, bool humanize = true)
-        => new(text, dir ?? EnFa, model, style, humanize);
+        TranslationStyle style = TranslationStyle.Original, bool humanize = true,
+        bool correctSource = false)
+        => new(text, dir ?? EnFa, model, style, humanize, correctSource);
 
     // ---- helpers -----------------------------------------------------------------------------
 
@@ -278,6 +279,20 @@ public class CachingTranslationServiceTests
 
         await Drain(cache.TranslateStreamAsync(Req("hi", humanize: true), default));
         await Drain(cache.TranslateStreamAsync(Req("hi", humanize: false), default));
+
+        Assert.Equal(2, inner.CallCount);
+    }
+
+    [Fact]
+    public async Task Different_correct_source_flag_is_a_miss()
+    {
+        // Auto-correct rides along in the translation prompt, so it changes the result: a cached
+        // translation made without it must never be served to a request that asked for it.
+        var inner = new FakeInner(["v"]);
+        var cache = Cache(inner, Clock());
+
+        await Drain(cache.TranslateStreamAsync(Req("hi", correctSource: false), default));
+        await Drain(cache.TranslateStreamAsync(Req("hi", correctSource: true), default));
 
         Assert.Equal(2, inner.CallCount);
     }

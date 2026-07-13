@@ -1,4 +1,3 @@
-using System.Windows;                 // WPF Clipboard (STA) — Infrastructure sets UseWPF=true.
 using AiTranslator.Core.Abstractions;
 using Windows.Win32;
 using Windows.Win32.Foundation;
@@ -8,17 +7,14 @@ namespace AiTranslator.Infrastructure.Input;
 
 /// <summary>
 /// Appends text to a target field via clipboard paste (ADR-0004): save clipboard, set our text, focus
-/// the target, Ctrl+End, Ctrl+V, then put the user's clipboard back. Call on the STA UI thread
-/// (clipboard requirement).
+/// the target, Ctrl+End, Ctrl+V, then put the user's clipboard back.
 /// <para>
-/// <b>Two races make the naive version paste the wrong thing, and both are handled here.</b> First, the
-/// keystrokes must not be sent until the target is really in the foreground, or they land in whatever
-/// window still has focus. Second, and the one that actually bit us: the target reads the clipboard
-/// when <i>it</i> gets round to processing the paste, which can be far later than <c>SendInput</c>
-/// returns. Restoring the previous clipboard on a short fixed timer therefore raced the target, and it
-/// pasted the user's OLD clipboard content instead of the translation. The restore now waits generously,
-/// runs off the caller's path so the box still dismisses at once, and is skipped if anything else has
-/// taken the clipboard in the meantime.
+/// <b>Three hazards, all handled here.</b> The keystrokes must not be sent until the target really has
+/// the foreground, or they land in whatever window still has focus. The target reads the clipboard when
+/// <i>it</i> processes the paste, which can be far later than <c>SendInput</c> returns, so the restore
+/// waits generously and is skipped if anything else has taken the board meanwhile. And every clipboard
+/// call goes through <see cref="StaClipboard"/> rather than running inline: done on the WPF UI thread it
+/// blocks that thread for as long as the board is contended, which froze the compose box for seconds.
 /// </para>
 /// </summary>
 public sealed class ClipboardTextInjector : ITextInjector
@@ -32,47 +28,44 @@ public sealed class ClipboardTextInjector : ITextInjector
     /// early is what made it paste the wrong text.</summary>
     private const int ClipboardRestoreDelayMs = 2500;
 
-    private const int ClipboardRetryCount = 20;
-    private const int ClipboardRetryDelayMs = 50;
-
     public async Task AppendTextAsync(FocusTarget target, string text, CancellationToken ct)
     {
-        string? previous = SafeGetClipboardText();
+        string? previous = await StaClipboard.GetTextAsync().WaitAsync(ct).ConfigureAwait(true);
 
         // NEVER paste on trust. Another app can hold the clipboard open (a clipboard manager, the
         // target itself), in which case the set silently fails and the OLD content is still there.
         // Sending Ctrl+V then injects that old content, which is exactly how a user's own source text
         // ended up in the chat instead of the translation. Verify, or refuse to paste.
-        if (!TrySetClipboardText(text))
+        if (!await StaClipboard.TrySetTextAsync(text).WaitAsync(ct).ConfigureAwait(true))
         {
             throw new TextInjectionException("The clipboard is held by another app.");
         }
 
         // Send the keystrokes only once the target really has the foreground, so they cannot land in
         // the window we are leaving.
-        await FocusTargetWindowAsync((HWND)target.WindowHandle, ct);
-        await Task.Delay(SettleAfterActivationMs, ct);
+        await FocusTargetWindowAsync((HWND)target.WindowHandle, ct).ConfigureAwait(true);
+        await Task.Delay(SettleAfterActivationMs, ct).ConfigureAwait(true);
 
         SendCtrl(VIRTUAL_KEY.VK_END);   // caret to end — append, do NOT select-all/replace
         SendCtrl(VIRTUAL_KEY.VK_V);     // paste
 
         if (previous is not null)
         {
-            // Deliberately not awaited: the caller can dismiss the box immediately, and the clipboard
-            // goes back once the target has certainly consumed it.
+            // Deliberately not awaited, and deliberately never resumed on the UI thread: the caller can
+            // dismiss the box at once, and the board goes back once the target has certainly consumed it.
             _ = RestorePreviousClipboardAsync(previous, ours: text);
         }
     }
 
     /// <summary>Put the user's clipboard back, but only once the target has had time to paste, and only
-    /// if our text is still on the clipboard (otherwise something else owns it and we must not clobber it).</summary>
+    /// if our text is still on the board (otherwise something else owns it and we must not clobber it).</summary>
     private static async Task RestorePreviousClipboardAsync(string previous, string ours)
     {
-        await Task.Delay(ClipboardRestoreDelayMs);
+        await Task.Delay(ClipboardRestoreDelayMs).ConfigureAwait(false);
 
-        if (SafeGetClipboardText() == ours)
+        if (await StaClipboard.GetTextAsync().ConfigureAwait(false) == ours)
         {
-            SetClipboardTextWithRetry(previous);
+            await StaClipboard.TrySetTextAsync(previous).ConfigureAwait(false);
         }
     }
 
@@ -92,7 +85,7 @@ public sealed class ClipboardTextInjector : ITextInjector
                 return;
             }
 
-            await Task.Delay(ForegroundPollMs, ct);
+            await Task.Delay(ForegroundPollMs, ct).ConfigureAwait(true);
             FocusTargetWindow(target);   // keep asking; the foreground can be handed over late
         }
 
@@ -143,48 +136,4 @@ public sealed class ClipboardTextInjector : ITextInjector
             },
         },
     };
-
-    private static string? SafeGetClipboardText()
-    {
-        try
-        {
-            return Clipboard.ContainsText() ? Clipboard.GetText() : null;
-        }
-        catch
-        {
-            return null;   // clipboard momentarily locked — treat as "nothing to restore"
-        }
-    }
-
-    /// <summary>
-    /// Put <paramref name="text"/> on the clipboard and confirm it actually landed. Returns false when
-    /// the clipboard could not be taken: a swallowed failure here is what makes a paste insert stale
-    /// content, so the caller must be able to see it.
-    /// </summary>
-    private static bool TrySetClipboardText(string text)
-    {
-        for (int attempt = 0; attempt < ClipboardRetryCount; attempt++)
-        {
-            try
-            {
-                Clipboard.SetText(text);
-
-                // Read it back: SetText can report success while another owner still holds the board.
-                if (SafeGetClipboardText() == text)
-                {
-                    return true;
-                }
-            }
-            catch
-            {
-                // CLIPBRD_E_CANT_OPEN — another app holds it; back off and try again.
-            }
-
-            Thread.Sleep(ClipboardRetryDelayMs);
-        }
-
-        return false;
-    }
-
-    private static void SetClipboardTextWithRetry(string text) => TrySetClipboardText(text);
 }

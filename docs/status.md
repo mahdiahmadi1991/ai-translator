@@ -30,9 +30,11 @@ canonical docs — it does not repeat them.
 - **Dictation** ([ADR-0009](architecture/decision-records/0009-speech-to-text-dictation.md)): a mic in
   the compose box streams speech to an OpenAI Realtime transcription session and types the words into
   the box **as you speak** (verified end to end, including Persian).
-- **Auto-correct** ([ADR-0010](architecture/decision-records/0010-auto-correct-pass.md)): proof-reads
-  the box before translating, repairing typos and the words dictation mishears. The speech layer has no
-  lever for this (the realtime model rejects `prompt`), so the fix is a text pass.
+- **Auto-correct** ([ADR-0010](architecture/decision-records/0010-auto-correct-pass.md)): repairs typos
+  and the words dictation mishears. The speech layer has no lever for this (the realtime model rejects
+  `prompt`), so the fix is a text pass: a standalone proof-read after dictation (which the user can
+  read and edit), and a repair layer folded into the translation prompt everywhere else, so translating
+  costs no extra call.
 
 - **Milestone:** M1 (walking skeleton) builds green on Windows; **M2 — Grammarly awareness** machinery
   is **built and wired** (FocusWatcher, TargetResolver via managed UIA, non-activating BadgeWindow,

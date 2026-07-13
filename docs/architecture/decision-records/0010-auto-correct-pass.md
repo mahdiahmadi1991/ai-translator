@@ -39,17 +39,23 @@ mistyped English ("helo", "plese", "tomorow") is fixed too.
 
 ## Decision
 
-Add an **auto-correct pass** (`autoCorrect`, default on) that proof-reads the compose box.
+Add an **auto-correct pass** (`autoCorrect`, default on) that covers **everything the user writes**, not
+only dictation, because typing has typos too. It takes two forms, chosen by whether the user will *see*
+the source again (see the [amendment](#amendment-2026-07-13-correction-on-the-translate-path-is-folded-into-the-translation-call)):
 
-- It runs on **everything in the box**, not only dictation, because typing has typos too. It fires
-  after dictation stops (so the corrected text is what the user sees and can edit) and again before a
-  translation if the text changed since the last correction, so pressing Translate straight after
-  dictating costs nothing extra.
+- **After dictation stops** it runs as a **standalone proof-read** of the box, because there the whole
+  point is that the corrected text is what the user reads, verifies, and edits.
+- **On the translate path** it is **folded into the translation call itself** (`TranslationRequest.
+  CorrectSource` adds a source-repair layer to the prompt). The box is cleared on success and never read
+  again, so a separate pass only bought the user a second wait.
+
+Supporting pieces:
+
 - `ITextCorrector` (Core) is the seam; `OpenAiTextCorrector` (Infrastructure) is one short Responses
   call that isolates the provider, as the translation client does. It reuses the configured `model`,
   so there is no new setting to keep in sync.
-- The instruction lives in Core (`CorrectionPromptBuilder`) with unit tests, because it is
-  load-bearing.
+- The instructions live in Core with unit tests, because they are load-bearing:
+  `CorrectionPromptBuilder` (standalone pass) and `PromptBuilder`'s source-repair layer (folded pass).
 
 **It corrects spelling, never style.** This is the rule that lets it run on everything safely: style is
 owned by the rewrite styles ([ADR-0007](0007-rewrite-styles-and-humanizer.md)), and in testing an
@@ -62,19 +68,48 @@ not block the translation; an empty model response is discarded rather than wipi
 
 ## Alternatives considered
 
-- **Fold the correction into the translation prompt.** Free (no extra call), but the box would still
-  show the garbled text; the user reported what they *saw*, and they need to be able to verify and edit
-  it before sending.
+- **Fold the correction into the translation prompt everywhere.** Rejected for the dictation path: the
+  box would still show the garbled text, and the user reported what they *saw*. Adopted for the translate
+  path, where nobody ever sees the source again (see the amendment below).
 - **A second, more accurate transcription pass on stop.** Measured: the file models are not better on
   the same audio. It would have cost more for nothing.
 - **Correct dictation only.** The owner asked for all text, on the grounds that typing has errors too,
-  and the same pass handles both.
+  and both forms of the pass handle both.
 
 ## Consequences
 
-- One short model call per correction (about 0.7 to 2.5 s), skipped when the text is unchanged, and
-  skipped entirely when `autoCorrect` is off.
-- The box text can change under the user right before a translation. That is intended: they see exactly
-  what will be translated, and can still edit it.
-- The prompt is load-bearing. Changing it should be re-checked against real failures, the same
+- Dictation costs one short model call on stop (about 0.7 to 2.5 s). Translation costs **no extra call
+  at all**, in any case.
+- After dictation the box text changes under the user. That is intended: they see exactly what will be
+  translated. The box stays **editable** while it happens, and if they start editing, their version wins
+  and the correction is dropped rather than overwriting it.
+- The prompts are load-bearing. Changing either should be re-checked against real failures, the same
   discipline the rewrite-style prompts follow.
+
+## Amendment (2026-07-13): correction on the translate path is folded into the translation call
+
+The first implementation ran the standalone corrector *before* every translation as well. The owner
+reported the compose box had become slow, and measurement against the live API agreed:
+
+| Sample | correct | translate | total |
+| --- | --- | --- | --- |
+| "سلام لطفا گزارش پروژه رو تا فردا برام بفرست" | 3592 ms | 1185 ms | 4777 ms |
+| "بهترین ایده برای پیازسی این پروژه…" | 1267 ms | 1460 ms | 2727 ms |
+
+The proof-read was adding **87% to 303%** on top of the translation, to fix mistakes the translator then
+had to read through anyway, in a box that is cleared the moment the translation is injected. So on that
+path the correction now rides along inside the translation prompt (one round-trip, not two).
+
+An A/B against the live API confirmed there is no quality cost. Same four samples, same style, both
+paths:
+
+| Source | Two calls (correct, then translate) | One folded call |
+| --- | --- | --- |
+| "…برای پیازسی این پروژه…" | "the best approach for **implementing** this project" | "the best idea for **implementing** this project" |
+| "plese revew the merg reqest…" | "درخواست مرج را بازبینی کن…" | "درخواست مرج را بررسی کنید…" |
+
+Both recover the garbled compound; neither carries a typo into the output. The folded call was also
+19% to 36% faster end to end.
+
+The standalone corrector is **kept** for dictation, unchanged, for the reason the original ADR gave: the
+user has to be able to read and fix what the microphone heard.

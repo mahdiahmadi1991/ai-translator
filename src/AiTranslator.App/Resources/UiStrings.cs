@@ -84,7 +84,7 @@ public static class UiStrings
     public const string SettingsDictation = "Dictation (speech to text)";
     public const string SettingsDictationHint = "Show a microphone in the box so you can speak instead of typing. Audio is sent to OpenAI only while you are dictating.";
     public const string SettingsAutoCorrect = "Auto-correct";
-    public const string SettingsAutoCorrectHint = "Proof-read the box before translating: fix typos, repair words dictation misheard, and write English terms in Latin script. It corrects spelling, never your style.";
+    public const string SettingsAutoCorrectHint = "Fix typos, repair words dictation misheard, and write English terms in Latin script. It corrects spelling, never your style.";
 
     // Settings: Account tab
     public const string SettingsApiKey = "OpenAI API key";

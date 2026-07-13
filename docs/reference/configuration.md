@@ -28,7 +28,7 @@ the canonical schema; update it in the same change as any settings-shape change.
 | `humanizeTranslations` | bool | `true` | Make translations read like a person wrote them (the "humanizer" prompt layer); applies to both read and compose modes |
 | `dictation` | bool | `true` | Show the microphone in the compose box so you can speak instead of typing. Audio is streamed to OpenAI **only** between an explicit start and stop ([ADR-0009](../architecture/decision-records/0009-speech-to-text-dictation.md)) |
 | `speechModel` | string | `"gpt-realtime-whisper"` | Speech-to-text model; configurable for the same reason `model` is (names drift). See [openai-models.md](openai-models.md) |
-| `autoCorrect` | bool | `true` | Proof-read the compose box before translating: fix typos, repair words dictation misheard, and write English terms in Latin script. Corrects spelling, never style ([ADR-0010](../architecture/decision-records/0010-auto-correct-pass.md)) |
+| `autoCorrect` | bool | `true` | Fix typos, repair words dictation misheard, and write English terms in Latin script. Runs as a proof-read of the box after dictation, and rides inside the translation prompt otherwise (no extra call). Corrects spelling, never style ([ADR-0010](../architecture/decision-records/0010-auto-correct-pass.md)) |
 | `blocklist` | string[] | `[]` | Regex **monikers** (matched case-insensitively against the foreground process name) where the badge is suppressed; empty ⇒ it appears everywhere |
 | `appOffsets` | map | `{}` | Per-exe badge offset calibration `{ "exe": {"corner":1,"dx":64,"dy":-6} }` |
 | `theme` | enum | `"system"` | `system` \| `light` \| `dark` |

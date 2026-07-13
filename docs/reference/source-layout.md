@@ -33,7 +33,8 @@ src/
     Secrets/CredentialManagerSecretStore.cs
     Input/HotkeyService.cs        #   RegisterHotKey / WM_HOTKEY
     Input/ForegroundFocusTargetProvider.cs   #   capture target HWND (M1)
-    Input/ClipboardTextInjector.cs           #   save/set clipboard, focus, Ctrl+A/V, restore
+    Input/ClipboardTextInjector.cs           #   save/set clipboard, focus, Ctrl+End/V, restore
+    Input/StaClipboard.cs                    #   all clipboard access, on an STA thread, off the UI thread
     Awareness/FocusWatcher.cs     #   SetWinEventHook focus/foreground watch (M2)
     Awareness/TargetResolver.cs   #   UIA field classify + locate (M2)
   AiTranslator.App/               # net10.0-windows — WPF + composition            [BUILT + GREEN]

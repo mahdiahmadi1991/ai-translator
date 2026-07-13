@@ -76,3 +76,35 @@ the injector throws rather than pasting blindly.
 On any injection failure the caller keeps the draft, brings the box back, and asks the user to press
 Translate again. Losing a translation silently, or inserting the wrong text, are both worse than a
 visible retry.
+
+## Addendum (2026-07-13): the clipboard must never be touched from the UI thread
+
+The fix above made the injector correct but left it running its clipboard work inline on the caller's
+thread, which is the WPF UI thread. That is the thread that paints the compose box and accepts typing.
+
+The Win32 clipboard is one global lock that any process may hold open, and WPF's `Clipboard` hides that
+behind an internal retry loop built on `Thread.Sleep`. Measured cost to the UI thread of a single
+injection, on an otherwise idle machine:
+
+| | blocked the UI thread for |
+| --- | --- |
+| set + read-back verify | 143 ms, 211 ms, **7430 ms** across three runs |
+| restore the user's clipboard | 10 ms, 1 ms, **23024 ms** across three runs |
+| set, with a rival holding the board open | **2546 ms** |
+
+For that whole time the box cannot repaint or take a keystroke, which is exactly the "the box got slow
+and janky" the owner reported.
+
+All clipboard access now goes through `StaClipboard`, which runs each operation on its own short-lived
+STA thread (the apartment the clipboard requires anyway) and is **awaited**, so the UI thread is never
+blocked. Verified by running a real WPF `Dispatcher` with a 10 ms timer during a contended injection and
+recording the longest gap between ticks:
+
+| | longest UI-thread stall |
+| --- | --- |
+| harness noise floor (no clipboard work at all) | 319 ms |
+| before: clipboard inline on the UI thread | 1186 ms, 2269 ms |
+| after: `StaClipboard`, awaited | 220 ms (at the noise floor) |
+
+The retry budget is now time-based (5 s) rather than a fixed attempt count, because a generous wait costs
+the user nothing once it no longer freezes the UI.

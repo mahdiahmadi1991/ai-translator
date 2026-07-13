@@ -80,8 +80,9 @@ public sealed class CachingTranslationService : ITranslationService
         }
     }
 
-    // Style and Humanize are part of the key: different styles produce different results and must be
-    // cached independently (switching style is correctly a miss).
+    // Style, Humanize, and CorrectSource are all part of the key: each changes the prompt, so each
+    // produces a different result and must be cached independently (switching any of them is correctly
+    // a miss).
     private static CacheKey BuildKey(TranslationRequest r)
         => new(
             r.Text.Trim(),
@@ -89,7 +90,8 @@ public sealed class CachingTranslationService : ITranslationService
             r.Direction.TargetLang.ToLowerInvariant(),
             r.Model,
             r.Style,
-            r.Humanize);
+            r.Humanize,
+            r.CorrectSource);
 
     private bool TryGet(CacheKey key, out string value)
     {
@@ -142,7 +144,8 @@ public sealed class CachingTranslationService : ITranslationService
     }
 
     private readonly record struct CacheKey(
-        string Text, string SourceLang, string TargetLang, string Model, TranslationStyle Style, bool Humanize);
+        string Text, string SourceLang, string TargetLang, string Model, TranslationStyle Style,
+        bool Humanize, bool CorrectSource);
 
     private sealed record Entry(CacheKey Key, string Value, DateTimeOffset ExpiresAt);
 }
