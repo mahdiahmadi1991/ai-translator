@@ -1,3 +1,22 @@
+# [1.2.0](https://github.com/mahdiahmadi1991/ai-translator/compare/v1.1.0...v1.2.0) (2026-07-13)
+
+
+### Bug Fixes
+
+* **compose:** stop freezing the box on the clipboard, and keep it editable while proof-reading ([5889680](https://github.com/mahdiahmadi1991/ai-translator/commit/5889680a4615c5b1582c963e444cb5af54eb2d99))
+* **dictation,inject:** never strand the session, never strand the user's clipboard ([56147d1](https://github.com/mahdiahmadi1991/ai-translator/commit/56147d144bbb7b3bca756ef6ceb0b1d789a68a13))
+* **dictation,inject:** never strand the session, never strand the user's clipboard ([b0155b9](https://github.com/mahdiahmadi1991/ai-translator/commit/b0155b9b7cac48eaf0247eef43a43d1639f265a4))
+* **inject:** never paste stale clipboard content, and never lose the translation ([26d08b9](https://github.com/mahdiahmadi1991/ai-translator/commit/26d08b9fbc5c11408b25fa266fa8abce2223d8d5))
+
+
+### Features
+
+* **compose:** auto-correct the box before translating ([ec775d2](https://github.com/mahdiahmadi1991/ai-translator/commit/ec775d2b155bb1f739eca11d2d6f629f315fffad))
+* **compose:** dictation — speak into the box and watch the words appear ([2b8ca67](https://github.com/mahdiahmadi1991/ai-translator/commit/2b8ca673251ef31cb16afa4575c1e1924b9c54f3))
+* **compose:** remember the rewrite style per app ([22a25c0](https://github.com/mahdiahmadi1991/ai-translator/commit/22a25c0ca1eaf3b0261c3192779f4db706ec7eeb))
+
+
+
 # [1.1.0](https://github.com/mahdiahmadi1991/ai-translator/compare/v1.0.0...v1.1.0) (2026-07-10)
 
 
