@@ -2,8 +2,10 @@ using AiTranslator.Core.Abstractions;
 using AiTranslator.Core.Settings;
 using AiTranslator.Core.Translation;
 using AiTranslator.Infrastructure.Awareness;
+using AiTranslator.Infrastructure.Correction;
 using AiTranslator.Infrastructure.Input;
 using AiTranslator.Infrastructure.Secrets;
+using AiTranslator.Infrastructure.Speech;
 using AiTranslator.Infrastructure.Translation;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -21,6 +23,16 @@ public static class ServiceConfiguration
         services.AddSingleton<IFocusTargetProvider, ForegroundFocusTargetProvider>();
         services.AddSingleton<ITargetResolver, TargetResolver>();
         services.AddSingleton<ITextInjector, ClipboardTextInjector>();
+
+        // Auto-correct (ADR-0010): proof-reads the box before it is translated.
+        services.AddSingleton<ITextCorrector>(sp =>
+            new OpenAiTextCorrector(() => sp.GetRequiredService<ISecretStore>().GetApiKey()));
+
+        // Dictation (ADR-0009): the recognizer drives the microphone, so the box only starts/stops it.
+        services.AddSingleton<IAudioCapture, NAudioMicrophoneCapture>();
+        services.AddSingleton<ISpeechRecognizer>(sp => new OpenAiRealtimeSpeechRecognizer(
+            () => sp.GetRequiredService<ISecretStore>().GetApiKey(),
+            sp.GetRequiredService<IAudioCapture>()));
         // Short-lived cache decorator: re-selecting the same text renders instantly and skips the API.
         // OpenAiTranslationService is left untouched — the cache wraps it transparently.
         services.AddSingleton<ITranslationService>(sp =>

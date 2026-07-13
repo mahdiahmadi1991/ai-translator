@@ -50,3 +50,77 @@ Layered injection, replicating Grammarly's approach:
 - KEYEVENTF_UNICODE / surrogate pairs — https://learn.microsoft.com/windows/win32/api/winuser/ns-winuser-keybdinput
 - TextPattern elements don't support ValuePattern — https://learn.microsoft.com/dotnet/framework/ui-automation/ui-automation-textpattern-overview
 - SetForegroundWindow + AttachThreadInput pattern — https://weblog.west-wind.com/posts/2020/Oct/12/Window-Activation-Headaches-in-WPF
+
+## Addendum (2026-07-13): two races that made it paste the wrong text
+
+Reported and reproduced: the user dictated Persian, pressed Translate, and their own Persian text
+appeared in the chat instead of the English translation. A sentinel on the clipboard proved what was
+happening, and there were two distinct defects, both now fixed in `ClipboardTextInjector`:
+
+1. **The set was allowed to fail silently.** Another app can hold the clipboard open (a clipboard
+   manager, the target itself), so `Clipboard.SetText` fails. The old code swallowed that and sent
+   `Ctrl+V` anyway, which pasted whatever was on the clipboard BEFORE, which is how the user's own
+   source text reached the chat. The injector now writes, **reads back to confirm**, and throws
+   `TextInjectionException` rather than pasting on trust.
+2. **The restore raced the paste.** The target reads the clipboard when *it* processes the paste, which
+   can be long after `SendInput` returns. Restoring the user's clipboard on a short fixed timer meant
+   the target sometimes read the restored (old) content. The restore now waits generously, runs off the
+   caller's path so the box still dismisses at once, and is skipped if anything else has taken the
+   clipboard meanwhile.
+
+Related: the keystrokes are now sent only once the target really holds the foreground (polled, not
+assumed), and the compose box hides *before* injecting, because while it held the foreground Windows
+could refuse to hand it over and the paste landed in the box itself. If the target never comes forward,
+the injector throws rather than pasting blindly.
+
+On any injection failure the caller keeps the draft, brings the box back, and asks the user to press
+Translate again. Losing a translation silently, or inserting the wrong text, are both worse than a
+visible retry.
+
+## Addendum (2026-07-13): the clipboard must never be touched from the UI thread
+
+The fix above made the injector correct but left it running its clipboard work inline on the caller's
+thread, which is the WPF UI thread. That is the thread that paints the compose box and accepts typing.
+
+The Win32 clipboard is one global lock that any process may hold open, and WPF's `Clipboard` hides that
+behind an internal retry loop built on `Thread.Sleep`. Measured cost to the UI thread of a single
+injection, on an otherwise idle machine:
+
+| | blocked the UI thread for |
+| --- | --- |
+| set + read-back verify | 143 ms, 211 ms, **7430 ms** across three runs |
+| restore the user's clipboard | 10 ms, 1 ms, **23024 ms** across three runs |
+| set, with a rival holding the board open | **2546 ms** |
+
+For that whole time the box cannot repaint or take a keystroke, which is exactly the "the box got slow
+and janky" the owner reported.
+
+All clipboard access now goes through `StaClipboard`, which runs each operation on its own short-lived
+STA thread (the apartment the clipboard requires anyway) and is **awaited**, so the UI thread is never
+blocked. Verified by running a real WPF `Dispatcher` with a 10 ms timer during a contended injection and
+recording the longest gap between ticks:
+
+| | longest UI-thread stall |
+| --- | --- |
+| harness noise floor (no clipboard work at all) | 319 ms |
+| before: clipboard inline on the UI thread | 1186 ms, 2269 ms |
+| after: `StaClipboard`, awaited | 220 ms (at the noise floor) |
+
+The retry budget is now time-based (5 s) rather than a fixed attempt count, because a generous wait costs
+the user nothing once it no longer freezes the UI.
+
+### The failure paths owe the user their clipboard back
+
+Making the injector throw rather than paste blindly (previous addendum) introduced a defect of its own,
+caught in a pre-release audit: the throw sat **between** the clipboard write and the restore, with no
+`try`/`finally`. So when the target never took the foreground, the user's clipboard was destroyed and
+their private translation was left on the global board for any process to read.
+
+Once our text is on the clipboard, **every** exit path now restores it, and a board the user had left
+empty is emptied again rather than keeping the translation. Verified by forcing the real failure (a target
+window that never comes forward):
+
+| Clipboard before | Injection | Clipboard after | Translation left on the board |
+| --- | --- | --- | --- |
+| the user's own text | fails | the user's own text | no |
+| empty | fails | empty | no |

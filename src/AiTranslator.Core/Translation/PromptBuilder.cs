@@ -13,9 +13,12 @@ namespace AiTranslator.Core.Translation;
 public static class PromptBuilder
 {
     public static string BuildSystemPrompt(LanguagePair pair)
-        => BuildSystemPrompt(pair, TranslationStyle.Original, humanize: false);
+        => BuildSystemPrompt(pair, TranslationStyle.Original, humanize: false, correctSource: false);
 
     public static string BuildSystemPrompt(LanguagePair pair, TranslationStyle style, bool humanize)
+        => BuildSystemPrompt(pair, style, humanize, correctSource: false);
+
+    public static string BuildSystemPrompt(LanguagePair pair, TranslationStyle style, bool humanize, bool correctSource)
     {
         string a = DisplayName(pair.Primary);
         string b = DisplayName(pair.Secondary);
@@ -33,6 +36,12 @@ public static class PromptBuilder
         sb.Append(
             "Always preserve the author's original meaning and intent. Never add information, opinions, " +
             "or content that is not in the source.\n");
+
+        if (correctSource)
+        {
+            sb.Append(SourceRepairLayer);
+            sb.Append('\n');
+        }
 
         string styleInstruction = StyleInstruction(style);
         if (styleInstruction.Length > 0)
@@ -80,6 +89,20 @@ public static class PromptBuilder
             "requests, or information; only elaborate on what the user already means.",
         _ => string.Empty,
     };
+
+    // Auto-correct, folded into the translation call instead of costing a second round-trip (ADR-0010).
+    // A separate proof-read pass before translating doubled the wait for every typed message (measured:
+    // +1.3 to +3.6 s, 87-303% on top of the translation) to fix mistakes the translator then had to read
+    // through anyway. The dictation path still runs the standalone corrector, because there the point is
+    // to show the user corrected text they can edit; here nobody ever sees the source again.
+    private const string SourceRepairLayer =
+        "The source was typed or dictated and may contain typos, misheard or garbled words, missing " +
+        "spaces, and English words spelled out phonetically in another script. Read through those " +
+        "mistakes and translate what the user MEANT, never the mistake itself. Repair a garbled word " +
+        "from its context (in a sentence about a project, Persian 'پیازسی' means 'پیاده‌سازی', " +
+        "'implementation'), and render phonetically transliterated English terms as the real English " +
+        "word ('ریویو' is 'review', 'دیپلوی' is 'deploy', 'کامیت' is 'commit'). Never carry a spelling " +
+        "mistake into the translation and never remark on one.";
 
     // Distilled from the humanizer skill ("Signs of AI writing"), scoped to short messaging text.
     // Scoped to QUALITY tells (how it reads), not length — length is owned by the Concise/Expand styles,

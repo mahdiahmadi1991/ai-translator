@@ -23,11 +23,27 @@ public sealed record AppSettings
     /// <summary>Global hotkey that translates the current selection (the guaranteed read-mode path).</summary>
     public string SelectionHotkey { get; init; } = "Ctrl+Alt+S";
 
-    /// <summary>The rewrite style applied when composing in the floating box; persists the last choice (ADR-0007).</summary>
+    /// <summary>The default rewrite style, used for apps that have no remembered choice (ADR-0007).</summary>
     public TranslationStyle RewriteStyle { get; init; } = TranslationStyle.Original;
+
+    /// <summary>Per-exe rewrite style (<c>appStyles</c>): each app remembers the style last used in it
+    /// (ADR-0008). Falls back to <see cref="RewriteStyle"/> for apps not listed here.</summary>
+    public IReadOnlyDictionary<string, TranslationStyle> AppStyles { get; init; }
+        = ReadOnlyDictionary<string, TranslationStyle>.Empty;
 
     /// <summary>Make translations read like a human wrote them (the "humanizer" layer). Opt-out.</summary>
     public bool HumanizeTranslations { get; init; } = true;
+
+    /// <summary>Dictation: speak into the compose box instead of typing (ADR-0009). Opt-out — while it
+    /// is on, audio is streamed to OpenAI only between an explicit start and stop.</summary>
+    public bool Dictation { get; init; } = true;
+
+    /// <summary>The speech-to-text model; configurable because model names drift, like <see cref="Model"/>.</summary>
+    public string SpeechModel { get; init; } = "gpt-realtime-whisper";
+
+    /// <summary>Proof-read the compose box before translating: fix typos, repair words dictation
+    /// misheard, and restore transliterated English terms (ADR-0010). Opt-out.</summary>
+    public bool AutoCorrect { get; init; } = true;
 
     // Opt-out model: the badge appears anywhere an editable field is focused, except apps whose exe
     // matches a Blocklist "moniker" (regex against the process name — see ExeName). Empty = everywhere.

@@ -34,7 +34,8 @@ public sealed class OpenAiTranslationService : ITranslationService
             ?? throw new InvalidOperationException("No OpenAI API key configured.");
 
         var pair = new LanguagePair(request.Direction.SourceLang, request.Direction.TargetLang);
-        var systemPrompt = PromptBuilder.BuildSystemPrompt(pair, request.Style, request.Humanize);
+        var systemPrompt = PromptBuilder.BuildSystemPrompt(
+            pair, request.Style, request.Humanize, request.CorrectSource);
 
         var client = new ResponsesClient(apiKey: apiKey);
         var options = new CreateResponseOptions

@@ -65,14 +65,43 @@ public class PromptBuilderTests
     }
 
     [Fact]
+    public void Source_repair_layer_is_added_only_when_requested()
+    {
+        // Auto-correct rides along with the translation instead of costing a second round-trip (ADR-0010).
+        var with = PromptBuilder.BuildSystemPrompt(
+            new LanguagePair("fa", "en"), TranslationStyle.Original, humanize: false, correctSource: true);
+        var without = PromptBuilder.BuildSystemPrompt(
+            new LanguagePair("fa", "en"), TranslationStyle.Original, humanize: false, correctSource: false);
+
+        Assert.Contains("typos", with);
+        Assert.Contains("translate what the user MEANT", with);
+        Assert.DoesNotContain("typos", without);
+    }
+
+    [Fact]
+    public void Source_repair_never_licenses_changing_the_message()
+    {
+        // Reading through a typo must not become permission to rewrite: authenticity still binds.
+        var prompt = PromptBuilder.BuildSystemPrompt(
+            new LanguagePair("fa", "en"), TranslationStyle.Original, humanize: true, correctSource: true);
+
+        Assert.Contains("original meaning and intent", prompt);
+        Assert.Contains("Never add information", prompt);
+    }
+
+    [Fact]
     public void Prompt_text_contains_no_em_or_en_dashes()
     {
         // The prompt tells the model to avoid them; keep the instruction itself clean too.
         foreach (TranslationStyle style in Enum.GetValues<TranslationStyle>())
         {
-            var prompt = PromptBuilder.BuildSystemPrompt(new LanguagePair("fa", "en"), style, humanize: true);
-            Assert.DoesNotContain('—', prompt);   // em dash
-            Assert.DoesNotContain('–', prompt);   // en dash
+            foreach (bool correctSource in new[] { false, true })
+            {
+                var prompt = PromptBuilder.BuildSystemPrompt(
+                    new LanguagePair("fa", "en"), style, humanize: true, correctSource);
+                Assert.DoesNotContain('—', prompt);   // em dash
+                Assert.DoesNotContain('–', prompt);   // en dash
+            }
         }
     }
 }

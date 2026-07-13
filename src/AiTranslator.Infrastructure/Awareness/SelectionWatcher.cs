@@ -7,6 +7,7 @@ using System.Windows.Threading;
 using AiTranslator.Core.Abstractions;
 using AiTranslator.Core.Awareness;
 using AiTranslator.Core.Models;
+using AiTranslator.Infrastructure.Input;
 using Windows.Win32;
 using Windows.Win32.Foundation;
 using Windows.Win32.System.Threading;
@@ -406,11 +407,7 @@ public sealed class SelectionWatcher : ISelectionWatcher
         catch { return Point.Empty; }
     }
 
-    private static string? SafeGetClipboardText()
-    {
-        try { return Clipboard.ContainsText() ? Clipboard.GetText() : null; }
-        catch { return null; }
-    }
+    private static string? SafeGetClipboardText() => StaClipboard.GetText();   // already on our STA thread
 
     private static void SendCtrlC()
     {
