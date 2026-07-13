@@ -14,9 +14,9 @@ canonical docs — it does not repeat them.
 
 | Layer | State | Evidence |
 | --- | --- | --- |
-| `AiTranslator.Core` + `AiTranslator.Tests` (`net10.0`) | **Built, 78/78 tests green** | `dotnet test` |
-| `AiTranslator.Infrastructure` + `AiTranslator.App` (`net10.0-windows`) | **Built green on Windows (0/0); released (v1.0.0) + auto-update pipeline** | `dotnet build AiTranslator.slnx` + live use |
-| Docs, ADRs (0001–0007), plans | Current | this dashboard |
+| `AiTranslator.Core` + `AiTranslator.Tests` (`net10.0`) | **Built, 104/104 tests green** | `dotnet test` |
+| `AiTranslator.Infrastructure` + `AiTranslator.App` (`net10.0-windows`) | **Built green on Windows (0/0); released (v1.1.0) + auto-update pipeline** | `dotnet build AiTranslator.slnx` + live use |
+| Docs, ADRs (0001–0009), plans | Current | this dashboard |
 
 **Shipped since M2** (all on `develop`, released via the Velopack + GitHub Actions pipeline):
 
@@ -26,6 +26,10 @@ canonical docs — it does not repeat them.
 - **Compose-mode rewrite styles + humanizer** ([ADR-0007](architecture/decision-records/0007-rewrite-styles-and-humanizer.md)):
   the floating box footer offers Original/Professional/Formal/Friendly/Email/Concise/Expand (one model
   call), and a default-on "human-sounding output" layer. Style behavior is verified with live API calls.
+  The style is remembered **per app** ([ADR-0008](architecture/decision-records/0008-per-app-rewrite-style-memory.md)).
+- **Dictation** ([ADR-0009](architecture/decision-records/0009-speech-to-text-dictation.md)): a mic in
+  the compose box streams speech to an OpenAI Realtime transcription session and types the words into
+  the box **as you speak** (verified end to end, including Persian).
 
 - **Milestone:** M1 (walking skeleton) builds green on Windows; **M2 — Grammarly awareness** machinery
   is **built and wired** (FocusWatcher, TargetResolver via managed UIA, non-activating BadgeWindow,

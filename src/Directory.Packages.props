@@ -20,5 +20,7 @@
     <PackageVersion Include="H.NotifyIcon.Wpf" Version="2.4.1" />
     <PackageVersion Include="Velopack" Version="1.2.0" />
     <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="10.0.9" />
+    <!-- Microphone capture for dictation (ADR-0009). Stable 2.x; NAudio 3 is still preview. -->
+    <PackageVersion Include="NAudio" Version="2.2.1" />
   </ItemGroup>
 </Project>

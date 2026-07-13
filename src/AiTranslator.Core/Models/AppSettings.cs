@@ -34,6 +34,13 @@ public sealed record AppSettings
     /// <summary>Make translations read like a human wrote them (the "humanizer" layer). Opt-out.</summary>
     public bool HumanizeTranslations { get; init; } = true;
 
+    /// <summary>Dictation: speak into the compose box instead of typing (ADR-0009). Opt-out — while it
+    /// is on, audio is streamed to OpenAI only between an explicit start and stop.</summary>
+    public bool Dictation { get; init; } = true;
+
+    /// <summary>The speech-to-text model; configurable because model names drift, like <see cref="Model"/>.</summary>
+    public string SpeechModel { get; init; } = "gpt-realtime-whisper";
+
     // Opt-out model: the badge appears anywhere an editable field is focused, except apps whose exe
     // matches a Blocklist "moniker" (regex against the process name — see ExeName). Empty = everywhere.
     public IReadOnlyList<string> Blocklist { get; init; } = [];

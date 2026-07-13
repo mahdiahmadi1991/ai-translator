@@ -9,7 +9,9 @@ using AiTranslator.App.Resources;
 using AiTranslator.Core.Abstractions;
 using AiTranslator.Core.Awareness;
 using AiTranslator.Core.Models;
+using AiTranslator.Core.Speech;
 using AiTranslator.Core.Translation;
+using Wpf.Ui.Controls;
 
 namespace AiTranslator.App.Windows;
 
@@ -25,31 +27,48 @@ public partial class OverlayInputWindow : Window
     private readonly IFocusTargetProvider _focus;
     private readonly ITranslationService _translator;
     private readonly ITextInjector _injector;
+    private readonly ISpeechRecognizer _speech;
     private readonly Func<AppSettings> _settingsProvider;
     private readonly DispatcherTimer _visibilityWatch;
+    private readonly DictationBuffer _dictation = new();
 
     private FocusTarget _target;
     private CancellationTokenSource? _inflight;
     private bool _busy;
     private bool _loadingStyle;   // suppress StyleChanged while we set the combo programmatically
+    private SpeechState _speechState = SpeechState.Idle;
 
     public OverlayInputWindow(
         IFocusTargetProvider focus, ITranslationService translator, ITextInjector injector,
-        Func<AppSettings> settingsProvider)
+        ISpeechRecognizer speech, Func<AppSettings> settingsProvider)
     {
         InitializeComponent();
         _focus = focus;
         _translator = translator;
         _injector = injector;
+        _speech = speech;
         _settingsProvider = settingsProvider;
 
         StyleCombo.ItemsSource = RewriteStyleCatalog.All;
         StyleCombo.SelectionChanged += OnStyleChanged;
 
+        // The recognizer raises on background threads — marshal everything to the UI thread.
+        _speech.PartialTranscript += (_, text) => Dispatcher.InvokeAsync(() => ShowDictated(_dictation.ApplyPartial(text)));
+        _speech.FinalTranscript += (_, text) => Dispatcher.InvokeAsync(() => ShowDictated(_dictation.ApplyFinal(text)));
+        _speech.StateChanged += (_, state) => Dispatcher.InvokeAsync(() => ApplySpeechState(state));
+        _speech.Failed += (_, ex) => Dispatcher.InvokeAsync(() => ShowStatus($"{UiStrings.DictationFailed} {ex.Message}"));
+
         PreviewKeyDown += (_, e) =>
         {
             if (e.Key == Key.Escape)
             {
+                if (_speechState != SpeechState.Idle)
+                {
+                    e.Handled = true;
+                    _ = StopDictationAsync();   // Esc while listening stops dictation, it does not discard
+                    return;
+                }
+
                 Input.Clear();   // explicit discard
                 Hide();
             }
@@ -77,6 +96,10 @@ public partial class OverlayInputWindow : Window
             else
             {
                 _visibilityWatch.Stop();
+                if (_speechState != SpeechState.Idle)
+                {
+                    _ = StopDictationAsync();   // a hidden box must never keep the microphone open
+                }
             }
         };
     }
@@ -108,6 +131,104 @@ public partial class OverlayInputWindow : Window
         }
     }
 
+    // ---- Dictation (ADR-0009) -----------------------------------------------------------------
+
+    private void OnMicClick(object sender, RoutedEventArgs e)
+    {
+        if (_speechState == SpeechState.Idle)
+        {
+            _ = StartDictationAsync();
+        }
+        else
+        {
+            _ = StopDictationAsync();
+        }
+    }
+
+    private async Task StartDictationAsync()
+    {
+        if (_busy)
+        {
+            return;   // a translation is in flight; don't fight over the box
+        }
+
+        var settings = _settingsProvider();
+        ClearStatus();
+
+        // Anchor dictation after whatever the user already typed, so speech is appended, not replacing.
+        _dictation.Begin(Input.Text);
+
+        try
+        {
+            await _speech.StartAsync(new SpeechOptions(settings.LanguagePair.Primary, settings.SpeechModel));
+        }
+        catch (InvalidOperationException ex)
+        {
+            // No key, or no usable microphone — both are things the user can act on.
+            ShowStatus(ex.Message.Contains("microphone", StringComparison.OrdinalIgnoreCase)
+                ? UiStrings.DictationNoMicrophone
+                : UiStrings.OverlayNoApiKey);
+        }
+        catch (Exception ex)
+        {
+            ShowStatus($"{UiStrings.DictationFailed} {ex.Message}");
+        }
+    }
+
+    private async Task StopDictationAsync()
+    {
+        try
+        {
+            await _speech.StopAsync();
+        }
+        catch (Exception ex)
+        {
+            ShowStatus($"{UiStrings.DictationFailed} {ex.Message}");
+        }
+        finally
+        {
+            ShowDictated(_dictation.Flush());   // keep a partial that never got a final
+        }
+    }
+
+    /// <summary>Render the live transcript, keeping the caret at the end so the box scrolls with speech.</summary>
+    private void ShowDictated(string text)
+    {
+        Input.Text = text;
+        Input.CaretIndex = Input.Text.Length;
+        Input.ScrollToEnd();
+    }
+
+    private void ApplySpeechState(SpeechState state)
+    {
+        _speechState = state;
+        bool listening = state is SpeechState.Connecting or SpeechState.Listening or SpeechState.Stopping;
+
+        // While the recognizer is re-rendering the text, typing would be clobbered — so hold the box.
+        Input.IsReadOnly = listening;
+        TranslateButton.IsEnabled = !listening && !_busy;
+        StyleCombo.IsEnabled = !listening;
+
+        MicIcon.Symbol = listening ? SymbolRegular.RecordStop24 : SymbolRegular.Mic24;
+        MicButton.Appearance = listening ? ControlAppearance.Danger : ControlAppearance.Secondary;
+        MicButton.ToolTip = listening ? UiStrings.DictationStop : UiStrings.DictationStart;
+
+        switch (state)
+        {
+            case SpeechState.Connecting:
+                ShowStatus(UiStrings.DictationConnecting, isError: false);
+                break;
+            case SpeechState.Listening:
+                ShowStatus(UiStrings.DictationListening, isError: false);
+                break;
+            case SpeechState.Idle:
+                ClearStatus();
+                Input.Focus();
+                Input.CaretIndex = Input.Text.Length;
+                break;
+        }
+    }
+
     private void OnCloseClick(object sender, RoutedEventArgs e) => Hide();   // close = hide; the draft is kept
 
     private void OnHeaderMouseDown(object sender, MouseButtonEventArgs e)
@@ -125,7 +246,7 @@ public partial class OverlayInputWindow : Window
     {
         while (node is not null)
         {
-            if (node is Button)
+            if (node is System.Windows.Controls.Primitives.ButtonBase)
             {
                 return true;
             }
@@ -146,11 +267,15 @@ public partial class OverlayInputWindow : Window
     {
         _target = target;
 
+        var settings = _settingsProvider();
+
         // Reflect the style remembered for THIS app (falling back to the global default), without
         // raising StyleChanged for the programmatic set.
         _loadingStyle = true;
-        StyleCombo.SelectedItem = RewriteStyleCatalog.Get(AppStyles.For(_target.ExeName, _settingsProvider()));
+        StyleCombo.SelectedItem = RewriteStyleCatalog.Get(AppStyles.For(_target.ExeName, settings));
         _loadingStyle = false;
+
+        MicButton.Visibility = settings.Dictation ? Visibility.Visible : Visibility.Collapsed;
 
         if (!IsVisible)
         {
@@ -219,9 +344,9 @@ public partial class OverlayInputWindow : Window
 
     private async Task TranslateAsync()
     {
-        if (_busy)
+        if (_busy || _speechState != SpeechState.Idle)
         {
-            return;
+            return;   // finish dictating first; the text is still being written
         }
 
         var text = Input.Text;
@@ -235,6 +360,7 @@ public partial class OverlayInputWindow : Window
         _busy = true;
         TranslateButton.IsEnabled = false;
         TranslateButton.Content = UiStrings.OverlayTranslating;
+        MicButton.IsEnabled = false;
         Busy.Visibility = Visibility.Visible;
         ClearStatus();
         await Dispatcher.Yield(DispatcherPriority.Background);
@@ -286,13 +412,22 @@ public partial class OverlayInputWindow : Window
             _busy = false;
             TranslateButton.IsEnabled = true;
             TranslateButton.Content = UiStrings.OverlayTranslate;
+            MicButton.IsEnabled = true;
             Busy.Visibility = Visibility.Collapsed;
         }
     }
 
-    private void ShowStatus(string message)
+    /// <summary>Show a one-line status. Errors are critical-coloured; progress notes (e.g. "Listening…")
+    /// are muted, so a normal dictation never looks like a failure.</summary>
+    private void ShowStatus(string message, bool isError = true)
     {
         Status.Text = message;
+        if (TryFindResource(isError ? "SystemFillColorCriticalBrush" : "TextFillColorSecondaryBrush")
+            is System.Windows.Media.Brush brush)
+        {
+            Status.Foreground = brush;
+        }
+
         Status.Visibility = Visibility.Visible;
     }
 

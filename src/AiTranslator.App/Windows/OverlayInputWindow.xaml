@@ -78,7 +78,17 @@
                     <ui:ProgressRing x:Name="Busy" DockPanel.Dock="Right" Width="20" Height="20"
                                      Margin="0,0,10,0" VerticalAlignment="Center"
                                      IsIndeterminate="True" Visibility="Collapsed" />
-                    <ComboBox x:Name="StyleCombo" DockPanel.Dock="Left" Width="172"
+                    <!-- Mic: click to dictate, click again to stop. Turns red and pulses while listening. -->
+                    <ui:Button x:Name="MicButton" DockPanel.Dock="Left" Appearance="Secondary"
+                               Padding="8,4" Margin="0,0,8,0" Click="OnMicClick"
+                               ToolTip="{x:Static res:UiStrings.DictationStart}"
+                               AutomationProperties.Name="{x:Static res:UiStrings.DictationStart}">
+                        <ui:Button.Icon>
+                            <ui:SymbolIcon x:Name="MicIcon" Symbol="Mic24" />
+                        </ui:Button.Icon>
+                    </ui:Button>
+
+                    <ComboBox x:Name="StyleCombo" DockPanel.Dock="Left" Width="150"
                               ItemTemplate="{StaticResource StyleItem}" MaxDropDownHeight="340"
                               ToolTip="{x:Static res:UiStrings.OverlayStyleLabel}"
                               AutomationProperties.Name="{x:Static res:UiStrings.OverlayStyleLabel}" />

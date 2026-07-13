@@ -85,7 +85,7 @@ interfaces so the core logic is unit-testable without a live desktop.
 
 ## 5. Primary data flow
 
-```
+```text
 focus change ─▶ FocusWatcher ─▶ TargetResolver ─▶ (editable? allowlisted?) ─▶ BadgeWindow shows
                                                             │
 user clicks badge / presses hotkey ─────────────────────────┘
@@ -140,6 +140,12 @@ See [ADR-0002](decision-records/0002-translation-openai-responses-streaming.md) 
   a selection) always uses `Original`. The style is remembered **per app**
   ([ADR-0008](decision-records/0008-per-app-rewrite-style-memory.md)): Teams can stay Formal while the
   browser stays Friendly, with the global `rewriteStyle` as the default for apps not seen yet.
+- **Dictation** ([ADR-0009](decision-records/0009-speech-to-text-dictation.md)): the compose box has a
+  mic. Audio is captured as 24 kHz mono PCM (NAudio, behind `IAudioCapture`) and streamed to an OpenAI
+  **Realtime transcription session** (`gpt-realtime-whisper`), which returns transcript deltas *while*
+  the user is still speaking. A pure `DictationBuffer` appends the live text after whatever was already
+  typed. Audio leaves the machine only between an explicit start and stop, and `dictation` turns the
+  feature off entirely.
 
 ## 8. Cross-cutting concerns
 
