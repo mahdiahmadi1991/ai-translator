@@ -209,6 +209,9 @@ public partial class OverlayInputWindow : Window
         var settings = _settingsProvider();
         var text = Input.Text;
 
+        ComposeLog.Write($"autocorrect: enabled={settings.AutoCorrect} readOnly={Input.IsReadOnly} " +
+                         $"len={text.Length} alreadyCorrected={text == _lastCorrected}");
+
         if (!settings.AutoCorrect || string.IsNullOrWhiteSpace(text) || text == _lastCorrected)
         {
             return;
@@ -220,6 +223,7 @@ public partial class OverlayInputWindow : Window
         try
         {
             var corrected = await _corrector.CorrectAsync(text, settings.Model);
+            ComposeLog.Write($"autocorrect done: in='{ComposeLog.Peek(text)}' out='{ComposeLog.Peek(corrected)}'");
             if (!string.IsNullOrWhiteSpace(corrected) && corrected != text)
             {
                 Input.Text = corrected;
@@ -400,13 +404,18 @@ public partial class OverlayInputWindow : Window
 
     private async Task TranslateAsync()
     {
+        ComposeLog.Write($"translate: busy={_busy} speech={_speechState} readOnly={Input.IsReadOnly} " +
+                         $"boxLen={Input.Text.Length} box='{ComposeLog.Peek(Input.Text)}'");
+
         if (_busy || _speechState != SpeechState.Idle)
         {
+            ComposeLog.Write("translate: SKIPPED (busy or still dictating)");
             return;   // finish dictating first; the text is still being written
         }
 
         if (string.IsNullOrWhiteSpace(Input.Text))
         {
+            ComposeLog.Write("translate: SKIPPED (box empty)");
             return;
         }
 
@@ -447,19 +456,35 @@ public partial class OverlayInputWindow : Window
             }
 
             var translation = sb.ToString();
+            ComposeLog.Write($"translated: dir={direction.SourceLang}->{direction.TargetLang} style={style} " +
+                             $"in='{ComposeLog.Peek(text)}' out='{ComposeLog.Peek(translation)}'");
 
             // Inject via clipboard paste (Ctrl+End then Ctrl+V): it goes through the app's own editor,
             // so the text is styled correctly (UIA SetValue can land text that renders invisibly in
             // Chromium/contenteditable fields), appends after existing content, and leaves the caret at
-            // the end. Then clear the draft and dismiss (focus returns to the app, ready to send).
+            // the end.
+            //
+            // Hide FIRST: while our box holds the foreground, Windows can refuse to hand it to the
+            // target, and the keystrokes would then land in the box itself and the translation would
+            // vanish. We already have the text, so the box has nothing left to show.
+            Hide();
             await _injector.AppendTextAsync(_target, translation, ct);
             Input.Clear();
             ClearStatus();
-            Hide();
         }
         catch (OperationCanceledException)
         {
             // Superseded — ignore.
+        }
+        catch (TextInjectionException ex)
+        {
+            // The translation exists but could not be inserted (the clipboard was held, or the target
+            // never took the foreground). Bring the box back with the draft intact so the user can just
+            // press Translate again, rather than silently pasting the wrong thing or losing the text.
+            ComposeLog.Write($"inject FAILED: {ex.Message} — draft kept");
+            Show();
+            Activate();
+            ShowStatus(UiStrings.OverlayInjectFailed);
         }
         catch (InvalidOperationException)
         {

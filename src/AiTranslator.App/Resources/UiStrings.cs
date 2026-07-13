@@ -34,6 +34,7 @@ public static class UiStrings
     public const string OverlayTranslating = "Translating…";
     public const string OverlayNoApiKey = "Add your OpenAI key in Settings first.";
     public const string OverlayError = "Couldn't translate:";
+    public const string OverlayInjectFailed = "Couldn't insert the translation — the clipboard was busy. Your text is still here; press Translate again.";
 
     // Badge
     public const string BadgeTooltip = "Click to translate into this field";

@@ -50,3 +50,29 @@ Layered injection, replicating Grammarly's approach:
 - KEYEVENTF_UNICODE / surrogate pairs — https://learn.microsoft.com/windows/win32/api/winuser/ns-winuser-keybdinput
 - TextPattern elements don't support ValuePattern — https://learn.microsoft.com/dotnet/framework/ui-automation/ui-automation-textpattern-overview
 - SetForegroundWindow + AttachThreadInput pattern — https://weblog.west-wind.com/posts/2020/Oct/12/Window-Activation-Headaches-in-WPF
+
+## Addendum (2026-07-13): two races that made it paste the wrong text
+
+Reported and reproduced: the user dictated Persian, pressed Translate, and their own Persian text
+appeared in the chat instead of the English translation. A sentinel on the clipboard proved what was
+happening, and there were two distinct defects, both now fixed in `ClipboardTextInjector`:
+
+1. **The set was allowed to fail silently.** Another app can hold the clipboard open (a clipboard
+   manager, the target itself), so `Clipboard.SetText` fails. The old code swallowed that and sent
+   `Ctrl+V` anyway, which pasted whatever was on the clipboard BEFORE, which is how the user's own
+   source text reached the chat. The injector now writes, **reads back to confirm**, and throws
+   `TextInjectionException` rather than pasting on trust.
+2. **The restore raced the paste.** The target reads the clipboard when *it* processes the paste, which
+   can be long after `SendInput` returns. Restoring the user's clipboard on a short fixed timer meant
+   the target sometimes read the restored (old) content. The restore now waits generously, runs off the
+   caller's path so the box still dismisses at once, and is skipped if anything else has taken the
+   clipboard meanwhile.
+
+Related: the keystrokes are now sent only once the target really holds the foreground (polled, not
+assumed), and the compose box hides *before* injecting, because while it held the foreground Windows
+could refuse to hand it over and the paste landed in the box itself. If the target never comes forward,
+the injector throws rather than pasting blindly.
+
+On any injection failure the caller keeps the draft, brings the box back, and asks the user to press
+Translate again. Losing a translation silently, or inserting the wrong text, are both worse than a
+visible retry.
