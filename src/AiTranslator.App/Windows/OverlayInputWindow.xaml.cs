@@ -40,6 +40,8 @@ public partial class OverlayInputWindow : Window
     private SpeechState _speechState = SpeechState.Idle;
     private string _lastCorrected = string.Empty;   // skip re-correcting text we already proof-read
     private Task? _correcting;                      // the proof-read in flight, so we never run two
+    private bool _stopping;                         // a stop is already unwinding — absorb further ones
+    private bool _statusIsError;                    // an error on show must not be wiped by a progress note
 
     public OverlayInputWindow(
         IFocusTargetProvider focus, ITranslationService translator, ITextInjector injector,
@@ -149,6 +151,30 @@ public partial class OverlayInputWindow : Window
         }
     }
 
+    /// <summary>
+    /// Stopping is not instant: the recognizer drains the audio it has and then waits for the final
+    /// transcript, which can take seconds. Re-entering during that window would flush the buffer early
+    /// and proof-read twice, so a stop in progress simply absorbs further stop requests (the mic button
+    /// is also disabled, and Esc and the auto-hide path come through here too).
+    /// </summary>
+    private async Task StopDictationAsync()
+    {
+        if (_stopping)
+        {
+            return;
+        }
+
+        _stopping = true;
+        try
+        {
+            await StopDictationCoreAsync();
+        }
+        finally
+        {
+            _stopping = false;
+        }
+    }
+
     private async Task StartDictationAsync()
     {
         if (_busy)
@@ -179,7 +205,7 @@ public partial class OverlayInputWindow : Window
         }
     }
 
-    private async Task StopDictationAsync()
+    private async Task StopDictationCoreAsync()
     {
         try
         {
@@ -222,7 +248,7 @@ public partial class OverlayInputWindow : Window
             return;
         }
 
-        ShowStatus(UiStrings.Correcting, isError: false);
+        ShowProgress(UiStrings.Correcting);
         try
         {
             var corrected = await _corrector.CorrectAsync(text, settings.Model);
@@ -269,27 +295,39 @@ public partial class OverlayInputWindow : Window
     private void ApplySpeechState(SpeechState state)
     {
         _speechState = state;
-        bool listening = state is SpeechState.Connecting or SpeechState.Listening or SpeechState.Stopping;
+        bool active = state is SpeechState.Connecting or SpeechState.Listening or SpeechState.Stopping;
 
         // While the recognizer is re-rendering the text, typing would be clobbered — so hold the box.
-        Input.IsReadOnly = listening;
-        TranslateButton.IsEnabled = !listening && !_busy;
-        StyleCombo.IsEnabled = !listening;
+        Input.IsReadOnly = active;
+        TranslateButton.IsEnabled = !active && !_busy;
+        StyleCombo.IsEnabled = !active;
 
-        MicIcon.Symbol = listening ? SymbolRegular.RecordStop24 : SymbolRegular.Mic24;
-        MicButton.Appearance = listening ? ControlAppearance.Danger : ControlAppearance.Secondary;
-        MicButton.ToolTip = listening ? UiStrings.DictationStop : UiStrings.DictationStart;
+        // Stopping can take seconds (drain the audio, wait for the final transcript). The mic must go
+        // dead for that window, or a second click re-enters the stop and proof-reads twice.
+        MicButton.IsEnabled = state is not SpeechState.Stopping;
+        MicIcon.Symbol = active ? SymbolRegular.RecordStop24 : SymbolRegular.Mic24;
+        MicButton.Appearance = active ? ControlAppearance.Danger : ControlAppearance.Secondary;
+        MicButton.ToolTip = active ? UiStrings.DictationStop : UiStrings.DictationStart;
 
         switch (state)
         {
             case SpeechState.Connecting:
-                ShowStatus(UiStrings.DictationConnecting, isError: false);
+                ShowProgress(UiStrings.DictationConnecting);
                 break;
             case SpeechState.Listening:
-                ShowStatus(UiStrings.DictationListening, isError: false);
+                ShowProgress(UiStrings.DictationListening);
+                break;
+            case SpeechState.Stopping:
+                // Without this the box sat locked with the status still reading "Listening…", so the
+                // user had no sign their stop had registered.
+                ShowProgress(UiStrings.DictationFinishing);
                 break;
             case SpeechState.Idle:
-                ClearStatus();
+                if (!_statusIsError)
+                {
+                    ClearStatus();   // never wipe an error the user has not had a chance to read
+                }
+
                 Input.Focus();
                 Input.CaretIndex = Input.Text.Length;
                 break;
@@ -532,12 +570,32 @@ public partial class OverlayInputWindow : Window
         }
 
         Status.Visibility = Visibility.Visible;
+        _statusIsError = isError;
+    }
+
+    /// <summary>
+    /// A muted progress note, which <b>never</b> overwrites an error.
+    /// <para>
+    /// The recognizer's state changes are marshalled onto the dispatcher, so they land <i>after</i> the
+    /// synchronous catch that reported the failure. Letting a queued "Connecting…" (or the Idle handler's
+    /// clear) run last is how "Add your OpenAI key in Settings first" was painted and instantly wiped,
+    /// leaving the user staring at a mic button that silently did nothing. The error wins; it is cleared
+    /// when the user next asks for something.
+    /// </para>
+    /// </summary>
+    private void ShowProgress(string message)
+    {
+        if (!_statusIsError)
+        {
+            ShowStatus(message, isError: false);
+        }
     }
 
     private void ClearStatus()
     {
         Status.Text = string.Empty;
         Status.Visibility = Visibility.Collapsed;
+        _statusIsError = false;
     }
 
     protected override void OnClosed(EventArgs e)

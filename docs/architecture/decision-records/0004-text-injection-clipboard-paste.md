@@ -108,3 +108,19 @@ recording the longest gap between ticks:
 
 The retry budget is now time-based (5 s) rather than a fixed attempt count, because a generous wait costs
 the user nothing once it no longer freezes the UI.
+
+### The failure paths owe the user their clipboard back
+
+Making the injector throw rather than paste blindly (previous addendum) introduced a defect of its own,
+caught in a pre-release audit: the throw sat **between** the clipboard write and the restore, with no
+`try`/`finally`. So when the target never took the foreground, the user's clipboard was destroyed and
+their private translation was left on the global board for any process to read.
+
+Once our text is on the clipboard, **every** exit path now restores it, and a board the user had left
+empty is emptied again rather than keeping the translation. Verified by forcing the real failure (a target
+window that never comes forward):
+
+| Clipboard before | Injection | Clipboard after | Translation left on the board |
+| --- | --- | --- | --- |
+| the user's own text | fails | the user's own text | no |
+| empty | fails | empty | no |
